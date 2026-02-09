@@ -19,6 +19,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - tanglepic_data:/app/data
     networks:
       - proxy
       - default
@@ -42,3 +44,4 @@ services:
 
 volumes:
   tanglepic_db:
+  tanglepic_data:

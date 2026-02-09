@@ -37,6 +37,7 @@ ENV NODE_ENV=production
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
+RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
 RUN npm install -g pnpm
 
