@@ -1,0 +1,35 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        DATABASE_URL: ${DATABASE_URL}
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - NEXTAUTH_URL=${NEXTAUTH_URL}
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=tanglepic
+      - POSTGRES_USER=tanglepic
+      - POSTGRES_PASSWORD=tanglepic
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tanglepic -d tanglepic"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - tanglepic_db:/var/lib/postgresql/data
+
+volumes:
+  tanglepic_db:
