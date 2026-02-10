@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 type GalleryImage = {
   id: string;
   baseName: string;
+  ext: string;
+  albumId?: string;
   width: number;
   height: number;
   uploadedAt: string;
@@ -20,7 +22,13 @@ type ShareInfo = {
   };
 };
 
-export default function GalleryClient({ images }: { images: GalleryImage[] }) {
+export default function GalleryClient({
+  images,
+  onImagesChange,
+}: {
+  images: GalleryImage[];
+  onImagesChange?: (next: GalleryImage[]) => void;
+}) {
   const [items, setItems] = useState<GalleryImage[]>(images);
   const [active, setActive] = useState<GalleryImage | null>(null);
   const [share, setShare] = useState<ShareInfo | null>(null);
@@ -42,8 +50,8 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
     () =>
       items.map((image) => ({
         ...image,
-        thumbUrl: `/image/${image.id}/${image.baseName}-sm.jpg`,
-        fullUrl: `/image/${image.id}/${image.baseName}.jpg`,
+        thumbUrl: `/image/${image.id}/${image.baseName}-sm.${image.ext}`,
+        fullUrl: `/image/${image.id}/${image.baseName}.${image.ext}`,
       })),
     [items],
   );
@@ -69,6 +77,11 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
 
       if (payload.share) {
         setShare({ id: payload.share.id, urls: payload.urls });
+        setItems((current) =>
+          current.map((item) =>
+            item.id === image.id ? { ...item, shared: true } : item,
+          ),
+        );
       }
     } catch (error) {
       setShareError(error instanceof Error ? error.message : "Unable to load share info.");
@@ -103,6 +116,11 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
 
     const payload = (await response.json()) as { share: { id: string }; urls: ShareInfo["urls"] };
     setShare({ id: payload.share.id, urls: payload.urls });
+    setItems((current) =>
+      current.map((item) =>
+        item.id === image.id ? { ...item, shared: true } : item,
+      ),
+    );
   }
 
   async function disableShare(image: GalleryImage) {
@@ -120,6 +138,11 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
     }
 
     setShare(null);
+    setItems((current) =>
+      current.map((item) =>
+        item.id === image.id ? { ...item, shared: false } : item,
+      ),
+    );
   }
 
   async function fetchAlbums() {
@@ -170,6 +193,11 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
     if (active && selected.has(active.id)) {
       setShare(null);
     }
+    setItems((current) =>
+      current.map((item) =>
+        selected.has(item.id) ? { ...item, shared: false } : item,
+      ),
+    );
     setSelected(new Set());
   }
 
@@ -180,9 +208,20 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
     }
     const ok = await runBulkAction("addToAlbum", { albumId: selectedAlbumId });
     if (!ok) return;
+    setItems((current) =>
+      current.map((item) =>
+        selected.has(item.id) ? { ...item, albumId: selectedAlbumId } : item,
+      ),
+    );
     setSelected(new Set());
     setIsAddModalOpen(false);
   }
+
+  useEffect(() => {
+    if (onImagesChange) {
+      onImagesChange(items);
+    }
+  }, [items, onImagesChange]);
 
   if (items.length === 0) {
     return (
@@ -289,7 +328,7 @@ export default function GalleryClient({ images }: { images: GalleryImage[] }) {
 
             <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[2fr,1fr]">
               <img
-                src={`/image/${active.id}/${active.baseName}-lg.jpg`}
+                src={`/image/${active.id}/${active.baseName}-lg.${active.ext}`}
                 alt="Uploaded"
                 className="max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
               />

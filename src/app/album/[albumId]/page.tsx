@@ -35,6 +35,11 @@ export default async function AlbumPage({
           <p className="text-xs text-neutral-500">
             {images.length} image{images.length === 1 ? "" : "s"}
           </p>
+          {images.length === 0 ? (
+            <p className="mt-2 text-xs text-neutral-500">
+              Go to the Images tab, select images, then choose “Add to album”.
+            </p>
+          ) : null}
         </div>
       </header>
 

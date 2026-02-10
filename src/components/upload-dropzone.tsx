@@ -7,6 +7,7 @@ type UploadState = "idle" | "uploading" | "success" | "error";
 type UploadedImage = {
   id: string;
   baseName: string;
+  ext: string;
 };
 
 type ShareInfo = {
@@ -86,9 +87,18 @@ export default function UploadDropzone() {
         return;
       }
 
-      const payload = (await response.json()) as { image: { id: string; baseName: string } };
+      const payload = (await response.json()) as {
+        image: { id: string; baseName: string; ext: string };
+      };
       setRecentUploads((current) => {
-        const next = [{ id: payload.image.id, baseName: payload.image.baseName }, ...current];
+        const next = [
+          {
+            id: payload.image.id,
+            baseName: payload.image.baseName,
+            ext: payload.image.ext,
+          },
+          ...current,
+        ];
         return next.slice(0, 10);
       });
     }
@@ -251,7 +261,7 @@ export default function UploadDropzone() {
           <h3 className="text-xs font-medium text-neutral-600">Recent uploads</h3>
           <div className="space-y-2">
             {recentUploads.map((image) => {
-              const thumbUrl = `/image/${image.id}/${image.baseName}-sm.jpg`;
+              const thumbUrl = `/image/${image.id}/${image.baseName}-sm.${image.ext}`;
               return (
                 <div
                   key={image.id}

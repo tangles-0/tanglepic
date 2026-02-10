@@ -1,10 +1,29 @@
 import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
 
+export const groups = pgTable("groups", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull().unique(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull(),
+});
+
+export const groupLimits = pgTable("group_limits", {
+  id: text("id").primaryKey(),
+  groupId: text("group_id").references(() => groups.id),
+  maxFileSize: integer("max_file_size").notNull(),
+  allowedTypes: text("allowed_types").notNull(),
+  rateLimitPerMinute: integer("rate_limit_per_minute").notNull(),
+  createdAt: timestamp("created_at", { mode: "date" }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull(),
+});
+
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
+  username: text("username").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  groupId: text("group_id").references(() => groups.id),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
+  lastLoginAt: timestamp("last_login_at", { mode: "date" }),
 });
 
 export const albums = pgTable("albums", {
@@ -23,8 +42,12 @@ export const images = pgTable("images", {
     .references(() => users.id),
   albumId: text("album_id").references(() => albums.id),
   baseName: text("base_name").notNull(),
+  ext: text("ext").notNull().default("jpg"),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
+  sizeOriginal: integer("size_original").notNull().default(0),
+  sizeSm: integer("size_sm").notNull().default(0),
+  sizeLg: integer("size_lg").notNull().default(0),
   uploadedAt: timestamp("uploaded_at", { mode: "date" }).notNull(),
 });
 
@@ -36,6 +59,7 @@ export const shares = pgTable("shares", {
   imageId: text("image_id")
     .notNull()
     .references(() => images.id),
+  code: text("code").unique(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
 });
 

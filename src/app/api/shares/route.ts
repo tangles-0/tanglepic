@@ -31,14 +31,17 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!share) {
     return NextResponse.json({ error: "Image not found." }, { status: 404 });
   }
-  const baseUrl = `/share/${share.id}/${image.baseName}.jpg`;
+  if (!share.code) {
+    return NextResponse.json({ error: "Share code unavailable." }, { status: 500 });
+  }
+  const baseUrl = `/share/${share.code}.${image.ext}`;
 
   return NextResponse.json({
     share,
     urls: {
       original: baseUrl,
-      sm: baseUrl.replace(".jpg", "-sm.jpg"),
-      lg: baseUrl.replace(".jpg", "-lg.jpg"),
+      sm: `/share/${share.code}-sm.${image.ext}`,
+      lg: `/share/${share.code}-lg.${image.ext}`,
     },
   });
 }
@@ -61,18 +64,24 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Image not found." }, { status: 404 });
   }
 
-  const share = await getShareForUserByImage(imageId, userId);
+  let share = await getShareForUserByImage(imageId, userId);
   if (!share) {
     return NextResponse.json({ share: null });
   }
 
-  const baseUrl = `/share/${share.id}/${image.baseName}.jpg`;
+  if (!share.code) {
+    share = await createShare(imageId, userId);
+    if (!share?.code) {
+      return NextResponse.json({ share: null });
+    }
+  }
+  const baseUrl = `/share/${share.code}.${image.ext}`;
   return NextResponse.json({
     share,
     urls: {
       original: baseUrl,
-      sm: baseUrl.replace(".jpg", "-sm.jpg"),
-      lg: baseUrl.replace(".jpg", "-lg.jpg"),
+      sm: `/share/${share.code}-sm.${image.ext}`,
+      lg: `/share/${share.code}-lg.${image.ext}`,
     },
   });
 }

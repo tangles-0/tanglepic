@@ -63,7 +63,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     const images = await deleteImagesForUser(userId, imageIds);
     await Promise.all(
       images.map((image) =>
-        deleteImageFiles(image.baseName, new Date(image.uploadedAt)),
+        deleteImageFiles(image.baseName, image.ext, new Date(image.uploadedAt)),
       ),
     );
     return NextResponse.json({ ok: true });

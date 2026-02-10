@@ -42,7 +42,9 @@ RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 RUN npm install -g pnpm
 
 # Copy the public folder
-#COPY --from=builder /app/public ./public
+RUN ls -a /app
+RUN mkdir -p /app/public && chown -R nextjs:nodejs /app/public
+COPY --from=builder /app/public ./public
 
 # Set the correct permission for prerender cache
 RUN mkdir .next

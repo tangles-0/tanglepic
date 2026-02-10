@@ -1,18 +1,34 @@
-import { promises as fs } from "fs";
 import type { NextRequest } from "next/server";
 import { getAlbumShareById, getImage } from "@/lib/metadata-store";
-import { getImagePath } from "@/lib/storage";
+import { getImageBuffer } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
-function resolveSize(fileName: string): "original" | "sm" | "lg" {
-  if (fileName.endsWith("-sm.jpg")) {
-    return "sm";
+function contentTypeForExt(ext: string): string {
+  switch (ext) {
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "gif":
+      return "image/gif";
+    default:
+      return "image/jpeg";
   }
-  if (fileName.endsWith("-lg.jpg")) {
-    return "lg";
+}
+
+function parseFileName(fileName: string): {
+  baseName: string;
+  size: "original" | "sm" | "lg";
+  ext: string;
+} | null {
+  const match = /^(.*?)(-sm|-lg)?\.([a-zA-Z0-9]+)$/.exec(fileName);
+  if (!match) {
+    return null;
   }
-  return "original";
+  const suffix = match[2];
+  const size = suffix === "-sm" ? "sm" : suffix === "-lg" ? "lg" : "original";
+  return { baseName: match[1], size, ext: match[3].toLowerCase() };
 }
 
 export async function GET(
@@ -22,7 +38,8 @@ export async function GET(
   }: { params: Promise<{ shareId: string; imageId: string; fileName: string }> },
 ): Promise<Response> {
   const { shareId, imageId, fileName } = await params;
-  if (!fileName.endsWith(".jpg")) {
+  const parsed = parseFileName(fileName);
+  if (!parsed) {
     return new Response("Not found", { status: 404 });
   }
 
@@ -36,14 +53,20 @@ export async function GET(
     return new Response("Not found", { status: 404 });
   }
 
-  const size = resolveSize(fileName);
-  const filePath = getImagePath(image.baseName, size, new Date(image.uploadedAt));
+  if (parsed.baseName !== image.baseName || parsed.ext !== image.ext) {
+    return new Response("Not found", { status: 404 });
+  }
 
   try {
-    const data = await fs.readFile(filePath);
-    return new Response(data, {
+    const data = await getImageBuffer(
+      image.baseName,
+      image.ext,
+      parsed.size,
+      new Date(image.uploadedAt),
+    );
+    return new Response(new Uint8Array(data), {
       headers: {
-        "Content-Type": "image/jpeg",
+        "Content-Type": contentTypeForExt(image.ext),
         "Cache-Control": "public, max-age=31536000, immutable",
       },
     });

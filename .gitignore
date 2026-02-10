@@ -43,6 +43,9 @@ next-env.d.ts
 /src/generated/prisma
 
 .env
+.env.production
 certificates
 
 /data/
+docker-compose.override.yml
+/deployment/node_modules

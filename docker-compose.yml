@@ -1,9 +1,11 @@
+
 networks:
   proxy:
     external: true
 
 services:
   app:
+    container_name: tanglepic-app
     build:
       context: .
       args:
@@ -25,6 +27,7 @@ services:
       - proxy
       - default
   db:
+    container_name: tanglepic-db
     image: postgres:16
     ports:
       - "5432:5432"

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 type AlbumImage = {
   id: string;
   baseName: string;
+  ext: string;
   width: number;
   height: number;
   uploadedAt: string;
@@ -242,7 +243,7 @@ export default function AlbumView({
                 Select
               </label>
               <img
-                src={`/image/${image.id}/${image.baseName}-lg.jpg`}
+                src={`/image/${image.id}/${image.baseName}-lg.${image.ext}`}
                 alt="Album image"
                 className="w-full rounded border border-neutral-200 object-contain"
               />

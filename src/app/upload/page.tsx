@@ -25,7 +25,7 @@ export default async function UploadPage() {
         <Link href="/gallery" className="underline">
           Back to gallery
         </Link>
-        <Link href="/api/auth/signout" className="underline">
+        <Link href="/signout" className="underline">
           Sign out
         </Link>
       </div>

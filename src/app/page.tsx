@@ -24,12 +24,12 @@ export default async function Home() {
       <section className="space-y-2 rounded-md border border-neutral-200 p-4">
         <h2 className="text-lg font-medium">Share link format</h2>
         <p className="text-neutral-600">
-          After creating a share link, append <code>-sm</code> or <code>-lg</code> before{" "}
-          <code>.jpg</code> for thumbnails.
+          After creating a share link, append <code>-sm</code> or <code>-lg</code> before the file
+          extension for thumbnails.
         </p>
         <p className="text-neutral-500 text-xs">
-          Example: <code>/share/&lt;shareId&gt;/&lt;file&gt;.jpg</code>,{" "}
-          <code>/share/&lt;shareId&gt;/&lt;file&gt;-sm.jpg</code>
+          Example: <code>/share/&lt;shareId&gt;/&lt;file&gt;.png</code>,{" "}
+          <code>/share/&lt;shareId&gt;/&lt;file&gt;-sm.png</code>
         </p>
       </section>
     </main>
