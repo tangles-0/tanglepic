@@ -19,9 +19,27 @@ export default async function RootLayout({
   const theme = userId ? await getUserTheme(userId) : "default";
 
   return (
-    <html lang="en">
+    <html lang="en" data-theme={theme} suppressHydrationWarning={true}>
+      {!userId ? (
+        <head>
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
+                try {
+                  const stored = localStorage.getItem("tanglepic-theme");
+                  if (stored) {
+                    document.documentElement.dataset.theme = stored;
+                  }
+                } catch {}
+              `,
+            }}
+          />
+        </head>
+      ) : null}
       <body className="min-h-screen bg-white text-neutral-900">
-        <ThemeProvider initialTheme={theme}>{children}</ThemeProvider>
+        <ThemeProvider initialTheme={theme} preferLocalStorage={!userId}>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   );

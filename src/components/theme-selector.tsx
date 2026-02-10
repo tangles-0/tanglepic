@@ -2,7 +2,7 @@
 
 import { useTheme } from "@/components/theme-provider";
 
-const THEMES = ["default"] as const;
+const THEMES = ["default", "dark", "neon-green", "retro", "cyber", "blood"] as const;
 
 export default function ThemeSelector() {
   const { theme, setTheme, isSaving } = useTheme();

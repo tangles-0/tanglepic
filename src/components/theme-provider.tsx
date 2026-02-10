@@ -1,6 +1,9 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+
+const THEME_STORAGE_KEY = "tanglepic-theme";
+const ALLOWED_THEMES = new Set(["default", "dark", "neon-green", "retro", "cyber", "blood"]);
 
 type ThemeContextValue = {
   theme: string;
@@ -12,16 +15,57 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({
   initialTheme,
+  preferLocalStorage = false,
   children,
 }: {
   initialTheme: string;
+  preferLocalStorage?: boolean;
   children: React.ReactNode;
 }) {
   const [theme, setThemeState] = useState(initialTheme);
   const [isSaving, setIsSaving] = useState(false);
+  const hasInitialized = useRef(false);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
+
+  useEffect(() => {
+    let next = theme;
+    if (preferLocalStorage) {
+      try {
+        const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+        if (stored && ALLOWED_THEMES.has(stored)) {
+          next = stored;
+          setThemeState(stored);
+        }
+      } catch {
+        // ignore storage errors
+      }
+    }
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // ignore storage errors
+    }
+    hasInitialized.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preferLocalStorage]);
+
+  useEffect(() => {
+    if (!hasInitialized.current) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch {
+      // ignore storage errors
+    }
+  }, [theme]);
 
   async function setTheme(next: string) {
     if (next === theme) return;
+    if (!ALLOWED_THEMES.has(next)) return;
     const previous = theme;
     setThemeState(next);
     setIsSaving(true);

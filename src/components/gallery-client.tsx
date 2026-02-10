@@ -375,7 +375,7 @@ export default function GalleryClient({
           {displayItems.map((image) => (
             <div
               key={image.id}
-              className="relative overflow-hidden rounded-md border border-neutral-200 text-left"
+              className="gallery-tile relative overflow-hidden rounded-md border border-neutral-200 text-left"
             >
               {image.shared ? (
                 <span className="absolute right-2 top-2 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
