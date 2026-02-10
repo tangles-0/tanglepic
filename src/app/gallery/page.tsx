@@ -3,8 +3,9 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { isAdminUser, listAlbums, listImagesForUser } from "@/lib/metadata-store";
 import GalleryTabs from "@/components/gallery-tabs";
-import Link from "next/link";
 import ThemeSelector from "@/components/theme-selector";
+import PageHeader from "@/components/ui/page-header";
+import TextLink from "@/components/ui/text-link";
 
 export default async function GalleryPage() {
   const session = await getServerSession(authOptions);
@@ -22,33 +23,29 @@ export default async function GalleryPage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-6 py-10 text-sm">
-      <header className="flex flex-wrap items-center justify-between gap-4">
-        <div className="space-y-2">
-          <Link href="/" className="text-sm text-neutral-500 underline">
-            Back to home
-          </Link>
-          <h1 className="text-2xl font-semibold">Your gallery</h1>
-          <p className="text-neutral-600">
-            {images.length} image{images.length === 1 ? "" : "s"} uploaded.
-          </p>
-        </div>
-        <div className="flex flex-col items-start gap-3 text-sm text-neutral-500 sm:items-end">
-          <ThemeSelector />
-          <div className="flex flex-wrap gap-3">
-            <Link href="/upload" className="underline">
-              Upload images
-            </Link>
-            {isAdmin ? (
-              <Link href="/admin" className="underline">
-                Admin
-              </Link>
-            ) : null}
-            <Link href="/signout" className="underline">
-              Sign out
-            </Link>
+      <PageHeader
+        title="Your gallery"
+        subtitle={`${images.length} image${images.length === 1 ? "" : "s"} uploaded.`}
+        backLink={{ href: "/", label: "Back to home" }}
+        actions={
+          <div className="flex flex-col items-start gap-3 text-sm text-neutral-500 sm:items-end">
+            <ThemeSelector />
+            <div className="flex flex-wrap gap-3">
+              <TextLink href="/upload" className="text-sm">
+                Upload images
+              </TextLink>
+              {isAdmin ? (
+                <TextLink href="/admin" className="text-sm">
+                  Admin
+                </TextLink>
+              ) : null}
+              <TextLink href="/signout" className="text-sm">
+                Sign out
+              </TextLink>
+            </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
       <GalleryTabs
         albums={albums.map((album) => ({ id: album.id, name: album.name }))}

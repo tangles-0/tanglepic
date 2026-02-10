@@ -1,8 +1,11 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getAdminStats, isAdminUser } from "@/lib/metadata-store";
+import PageHeader from "@/components/ui/page-header";
+import TextLink from "@/components/ui/text-link";
+import StatCard from "@/components/ui/stat-card";
+import Panel from "@/components/ui/panel";
 
 function formatBytes(value: number) {
   if (!value) return "0 B";
@@ -32,72 +35,44 @@ export default async function AdminHomePage() {
 
   return (
     <main className="mx-auto flex min-h-screen max-w-5xl flex-col gap-6 px-6 py-10 text-sm">
-      <header className="space-y-2">
-        <Link href="/gallery" className="text-sm text-neutral-500 underline">
-          Back to gallery
-        </Link>
-        <h1 className="text-2xl font-semibold">Admin</h1>
-        <p className="text-neutral-600">Platform overview and controls.</p>
-      </header>
-
-      <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
-        <Link href="/admin/users" className="underline">
-          Users
-        </Link>
-        <Link href="/admin/groups" className="underline">
-          Groups
-        </Link>
-        <Link href="/admin/limits" className="underline">
-          Limits
-        </Link>
-        <Link href="/admin/settings" className="underline">
-          Settings
-        </Link>
-      </div>
+      <PageHeader
+        title="Admin"
+        subtitle="Platform overview and controls."
+        backLink={{ href: "/gallery", label: "Back to gallery" }}
+      >
+        <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
+          <TextLink href="/admin/users" className="text-sm">
+            Users
+          </TextLink>
+          <TextLink href="/admin/groups" className="text-sm">
+            Groups
+          </TextLink>
+          <TextLink href="/admin/limits" className="text-sm">
+            Limits
+          </TextLink>
+          <TextLink href="/admin/settings" className="text-sm">
+            Settings
+          </TextLink>
+        </div>
+      </PageHeader>
 
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Total disk usage</div>
-          <div className="mt-2 text-lg font-semibold">{formatBytes(stats.totalBytes)}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Files</div>
-          <div className="mt-2 text-lg font-semibold">{stats.imageCount}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Users</div>
-          <div className="mt-2 text-lg font-semibold">{stats.userCount}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Uploads last 24h</div>
-          <div className="mt-2 text-lg font-semibold">{stats.uploadsLast24h}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Signups last 24h</div>
-          <div className="mt-2 text-lg font-semibold">{stats.signupsLast24h}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Signups last 30d</div>
-          <div className="mt-2 text-lg font-semibold">{stats.signupsLast30d}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Albums</div>
-          <div className="mt-2 text-lg font-semibold">{stats.albumCount}</div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
-          <div className="text-xs text-neutral-500">Shared images</div>
-          <div className="mt-2 text-lg font-semibold">{stats.sharedPercent}%</div>
-        </div>
+        <StatCard label="Total disk usage" value={formatBytes(stats.totalBytes)} />
+        <StatCard label="Files" value={stats.imageCount} />
+        <StatCard label="Users" value={stats.userCount} />
+        <StatCard label="Uploads last 24h" value={stats.uploadsLast24h} />
+        <StatCard label="Signups last 24h" value={stats.signupsLast24h} />
+        <StatCard label="Signups last 30d" value={stats.signupsLast30d} />
+        <StatCard label="Albums" value={stats.albumCount} />
+        <StatCard label="Shared images" value={`${stats.sharedPercent}%`} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded border border-neutral-200 p-4 text-xs">
+        <Panel className="text-xs">
           <div className="text-neutral-500">Average file size</div>
-          <div className="mt-2 text-lg font-semibold">
-            {formatBytes(stats.averageFileSize)}
-          </div>
-        </div>
-        <div className="rounded border border-neutral-200 p-4">
+          <div className="mt-2 text-lg font-semibold">{formatBytes(stats.averageFileSize)}</div>
+        </Panel>
+        <Panel>
           <div className="text-xs text-neutral-500">File types</div>
           <div className="mt-3 space-y-2 text-xs">
             {stats.filetypeBreakdown.length === 0 ? (
@@ -111,7 +86,7 @@ export default async function AdminHomePage() {
               ))
             )}
           </div>
-        </div>
+        </Panel>
       </section>
     </main>
   );

@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getAppSettings, getUserUploadStats } from "@/lib/metadata-store";
 import AuthForms from "@/components/auth-forms";
+import AlertBanner from "@/components/ui/alert-banner";
+import TextLink from "@/components/ui/text-link";
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
@@ -51,19 +52,20 @@ export default async function Home() {
             You have {userStats?.imageCount ?? 0} images uploaded using{" "}
             {formatBytes(userStats?.totalBytes ?? 0)} of disk space.
           </p>
-          <Link
+          <TextLink
             href="/gallery"
-            className="inline-flex items-center gap-1 text-lg font-medium text-neutral-700 underline"
+            variant="default"
+            className="inline-flex items-center gap-1 text-lg font-medium"
           >
             Click here to go to your gallery <span aria-hidden="true">&gt;</span>
-          </Link>
+          </TextLink>
         </section>
       ) : (
         <>
           {!settings.signupsEnabled ? (
-            <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+            <AlertBanner>
               New signups are currently disabled. Existing users can still log in.
-            </div>
+            </AlertBanner>
           ) : null}
 
           <AuthForms signupsEnabled={settings.signupsEnabled} />
