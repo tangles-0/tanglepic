@@ -146,19 +146,21 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
         continue;
       }
 
-      if (result.image) {
-        setRecentUploads((current) => {
-          const next = [
-            {
-              id: result.image.id,
-              baseName: result.image.baseName,
-              ext: result.image.ext,
-            },
-            ...current,
-          ];
-          return next.slice(0, 10);
-        });
+      const image = result.image;
+      if (!image) {
+        continue;
       }
+      setRecentUploads((current) => {
+        const next = [
+          {
+            id: image.id,
+            baseName: image.baseName,
+            ext: image.ext,
+          },
+          ...current,
+        ];
+        return next.slice(0, 10);
+      });
     }
 
     setStatus("success");
