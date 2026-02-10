@@ -1,7 +1,16 @@
 import { randomUUID, randomBytes } from "crypto";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
-import { albumShares, albums, groupLimits, groups, images, shares, users } from "@/db/schema";
+import {
+  albumShares,
+  albums,
+  appSettings,
+  groupLimits,
+  groups,
+  images,
+  shares,
+  users,
+} from "@/db/schema";
 
 export type Album = {
   id: string;
@@ -233,6 +242,24 @@ export async function listImagesByIdsForUser(
     sizeLg: row.sizeLg,
     uploadedAt: row.uploadedAt.toISOString(),
   }));
+}
+
+export async function getUserUploadStats(userId: string): Promise<{
+  imageCount: number;
+  totalBytes: number;
+}> {
+  const [row] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${images.sizeOriginal} + ${images.sizeSm} + ${images.sizeLg}), 0)`,
+      imageCount: sql<number>`count(${images.id})`,
+    })
+    .from(images)
+    .where(eq(images.userId, userId));
+
+  return {
+    imageCount: Number(row?.imageCount ?? 0),
+    totalBytes: Number(row?.totalBytes ?? 0),
+  };
 }
 
 export async function updateImagesAlbum(
@@ -718,6 +745,20 @@ export async function getUserGroupInfo(userId: string): Promise<{
   };
 }
 
+export async function getUserTheme(userId: string): Promise<string> {
+  const [row] = await db
+    .select({ theme: users.theme })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+
+  return row?.theme ?? "default";
+}
+
+export async function setUserTheme(userId: string, theme: string): Promise<void> {
+  await db.update(users).set({ theme }).where(eq(users.id, userId));
+}
+
 export type GroupLimits = {
   id: string;
   groupId: string | null;
@@ -834,6 +875,12 @@ export async function getAdminStats(): Promise<{
   imageCount: number;
   userCount: number;
   uploadsLast24h: number;
+  signupsLast24h: number;
+  signupsLast30d: number;
+  sharedPercent: number;
+  averageFileSize: number;
+  albumCount: number;
+  filetypeBreakdown: { ext: string; count: number }[];
 }> {
   const [row] = await db
     .select({
@@ -853,11 +900,152 @@ export async function getAdminStats(): Promise<{
     .from(images)
     .where(sql`${images.uploadedAt} >= now() - interval '24 hours'`);
 
+  const [signup24hRow] = await db
+    .select({ signupsLast24h: sql<number>`count(${users.id})` })
+    .from(users)
+    .where(sql`${users.createdAt} >= now() - interval '24 hours'`);
+
+  const [signup30dRow] = await db
+    .select({ signupsLast30d: sql<number>`count(${users.id})` })
+    .from(users)
+    .where(sql`${users.createdAt} >= now() - interval '30 days'`);
+
+  const [sharedRow] = await db
+    .select({ sharedCount: sql<number>`count(distinct ${shares.imageId})` })
+    .from(shares);
+
+  const [albumRow] = await db
+    .select({ albumCount: sql<number>`count(${albums.id})` })
+    .from(albums);
+
+  const filetypeRows = await db
+    .select({ ext: images.ext, count: sql<number>`count(${images.id})` })
+    .from(images)
+    .groupBy(images.ext)
+    .orderBy(sql`count(${images.id}) desc`);
+
+  const imageCount = Number(row?.imageCount ?? 0);
+  const totalBytes = Number(row?.totalBytes ?? 0);
+  const sharedCount = Number(sharedRow?.sharedCount ?? 0);
+
   return {
-    totalBytes: Number(row?.totalBytes ?? 0),
-    imageCount: Number(row?.imageCount ?? 0),
+    totalBytes,
+    imageCount,
     userCount: Number(userRow?.userCount ?? 0),
     uploadsLast24h: Number(uploadsRow?.uploadsLast24h ?? 0),
+    signupsLast24h: Number(signup24hRow?.signupsLast24h ?? 0),
+    signupsLast30d: Number(signup30dRow?.signupsLast30d ?? 0),
+    sharedPercent: imageCount > 0 ? Math.round((sharedCount / imageCount) * 100) : 0,
+    averageFileSize: imageCount > 0 ? Math.round(totalBytes / imageCount) : 0,
+    albumCount: Number(albumRow?.albumCount ?? 0),
+    filetypeBreakdown: filetypeRows.map((rowItem) => ({
+      ext: rowItem.ext ?? "unknown",
+      count: Number(rowItem.count ?? 0),
+    })),
+  };
+}
+
+export type AppSettings = {
+  motd: string;
+  costThisMonth: number;
+  fundedThisMonth: number;
+  donateUrl?: string;
+  supportEnabled: boolean;
+  signupsEnabled: boolean;
+  uploadsEnabled: boolean;
+  updatedAt: string;
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  motd: "Welcome to TanglePic.",
+  costThisMonth: 0,
+  fundedThisMonth: 0,
+  donateUrl: undefined,
+  supportEnabled: true,
+  signupsEnabled: true,
+  uploadsEnabled: true,
+  updatedAt: new Date(0).toISOString(),
+};
+
+export async function getAppSettings(): Promise<AppSettings> {
+  const [row] = await db.select().from(appSettings).limit(1);
+  if (!row) {
+    const now = new Date();
+    await db.insert(appSettings).values({
+      id: "global",
+      motd: DEFAULT_SETTINGS.motd,
+      costThisMonth: DEFAULT_SETTINGS.costThisMonth,
+      fundedThisMonth: DEFAULT_SETTINGS.fundedThisMonth,
+      donateUrl: DEFAULT_SETTINGS.donateUrl ?? null,
+      supportEnabled: DEFAULT_SETTINGS.supportEnabled,
+      signupsEnabled: DEFAULT_SETTINGS.signupsEnabled,
+      uploadsEnabled: DEFAULT_SETTINGS.uploadsEnabled,
+      updatedAt: now,
+    });
+    return { ...DEFAULT_SETTINGS, updatedAt: now.toISOString() };
+  }
+  return {
+    motd: row.motd,
+    costThisMonth: row.costThisMonth,
+    fundedThisMonth: row.fundedThisMonth,
+    donateUrl: row.donateUrl ?? undefined,
+    supportEnabled: row.supportEnabled,
+    signupsEnabled: row.signupsEnabled,
+    uploadsEnabled: row.uploadsEnabled,
+    updatedAt: row.updatedAt.toISOString(),
+  };
+}
+
+export async function updateAppSettings(input: {
+  motd?: string;
+  costThisMonth?: number;
+  fundedThisMonth?: number;
+  donateUrl?: string | null;
+  supportEnabled?: boolean;
+  signupsEnabled?: boolean;
+  uploadsEnabled?: boolean;
+}): Promise<AppSettings> {
+  const existing = await getAppSettings();
+  const updatedAt = new Date();
+  const [row] = await db
+    .update(appSettings)
+    .set({
+      motd: input.motd ?? existing.motd,
+      costThisMonth:
+        typeof input.costThisMonth === "number"
+          ? input.costThisMonth
+          : existing.costThisMonth,
+      fundedThisMonth:
+        typeof input.fundedThisMonth === "number"
+          ? input.fundedThisMonth
+          : existing.fundedThisMonth,
+      donateUrl: input.donateUrl ?? existing.donateUrl ?? null,
+      supportEnabled:
+        typeof input.supportEnabled === "boolean"
+          ? input.supportEnabled
+          : existing.supportEnabled,
+      signupsEnabled:
+        typeof input.signupsEnabled === "boolean"
+          ? input.signupsEnabled
+          : existing.signupsEnabled,
+      uploadsEnabled:
+        typeof input.uploadsEnabled === "boolean"
+          ? input.uploadsEnabled
+          : existing.uploadsEnabled,
+      updatedAt,
+    })
+    .where(eq(appSettings.id, "global"))
+    .returning();
+
+  return {
+    motd: row.motd,
+    costThisMonth: row.costThisMonth,
+    fundedThisMonth: row.fundedThisMonth,
+    donateUrl: row.donateUrl ?? undefined,
+    supportEnabled: row.supportEnabled,
+    signupsEnabled: row.signupsEnabled,
+    uploadsEnabled: row.uploadsEnabled,
+    updatedAt: row.updatedAt.toISOString(),
   };
 }
 

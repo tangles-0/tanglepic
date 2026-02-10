@@ -27,7 +27,7 @@ export default async function AlbumPage({
   return (
     <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10 text-sm">
       <header className="space-y-3">
-        <Link href="/gallery" className="text-xs text-neutral-500 underline">
+        <Link href="/gallery" className="text-sm text-neutral-500 underline">
           Back to gallery
         </Link>
         <div>

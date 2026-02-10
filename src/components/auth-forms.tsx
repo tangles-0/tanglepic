@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 
-export default function AuthForms() {
+export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean }) {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [signUpError, setSignUpError] = useState<string | null>(null);
   const [signInError, setSignInError] = useState<string | null>(null);
@@ -111,6 +111,7 @@ export default function AuthForms() {
           className={`rounded px-3 py-1 ${
             mode === "signup" ? "bg-black text-white" : "border border-neutral-200"
           }`}
+          disabled={!signupsEnabled}
         >
           Sign up
         </button>
@@ -125,32 +126,45 @@ export default function AuthForms() {
               type="text"
               placeholder="Display name (min 3 chars)"
               className="w-full rounded border px-3 py-2"
+              disabled={!signupsEnabled}
             />
             <input
               name="email"
               type="email"
               placeholder="Email"
               className="w-full rounded border px-3 py-2"
+              disabled={!signupsEnabled}
             />
             <input
               name="password"
               type="password"
               placeholder="Password (letters + numbers)"
               className="w-full rounded border px-3 py-2"
+              disabled={!signupsEnabled}
             />
             <input
               name="confirmPassword"
               type="password"
               placeholder="Confirm password"
               className="w-full rounded border px-3 py-2"
+              disabled={!signupsEnabled}
             />
             <p className="text-xs text-neutral-500">
               We never send emails or share them. They are only used for account recovery — use a
               fake one if you want.
             </p>
-            <button className="rounded bg-black px-4 py-2 text-white" type="submit">
+            <button
+              className="rounded bg-black px-4 py-2 text-white"
+              type="submit"
+              disabled={!signupsEnabled}
+            >
               Sign up
             </button>
+            {!signupsEnabled ? (
+              <p className="text-xs text-neutral-500">
+                Signups are currently disabled. Please check back later.
+              </p>
+            ) : null}
             {signUpError ? (
               <p className="text-xs text-red-600">{signUpError}</p>
             ) : null}

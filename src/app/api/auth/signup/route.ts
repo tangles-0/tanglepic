@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { randomUUID } from "crypto";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { getAppSettings } from "@/lib/metadata-store";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   const username = payload?.username?.trim().toLowerCase();
   const password = payload?.password;
   const confirmPassword = payload?.confirmPassword;
+
+  const settings = await getAppSettings();
+  if (!settings.signupsEnabled) {
+    return NextResponse.json({ error: "Signups are currently disabled." }, { status: 403 });
+  }
 
   if (!email || !username || !password || !confirmPassword) {
     return NextResponse.json(

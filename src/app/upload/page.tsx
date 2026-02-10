@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
+import { getAppSettings } from "@/lib/metadata-store";
 import UploadDropzone from "@/components/upload-dropzone";
 
 export default async function UploadPage() {
@@ -9,6 +10,8 @@ export default async function UploadPage() {
   if (!session?.user) {
     redirect("/");
   }
+
+  const settings = await getAppSettings();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10 text-sm">
@@ -19,9 +22,15 @@ export default async function UploadPage() {
         </p>
       </header>
 
-      <UploadDropzone />
+      {!settings.uploadsEnabled ? (
+        <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700">
+          Uploads are currently disabled by the administrator.
+        </div>
+      ) : null}
 
-      <div className="flex flex-wrap gap-4 text-xs text-neutral-500">
+      <UploadDropzone uploadsEnabled={settings.uploadsEnabled} />
+
+      <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
         <Link href="/gallery" className="underline">
           Back to gallery
         </Link>

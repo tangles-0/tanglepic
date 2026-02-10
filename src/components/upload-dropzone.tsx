@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { uploadSingleImage } from "@/lib/upload-client";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -17,11 +18,18 @@ type ShareInfo = {
   };
 };
 
-export default function UploadDropzone() {
+type UploadMessage = {
+  id: string;
+  text: string;
+  tone: "success" | "error";
+};
+
+export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabled?: boolean }) {
   const [albumId, setAlbumId] = useState("");
   const [status, setStatus] = useState<UploadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [globalDragging, setGlobalDragging] = useState(false);
   const [albums, setAlbums] = useState<{ id: string; name: string }[]>([]);
   const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
@@ -29,6 +37,8 @@ export default function UploadDropzone() {
   const [recentUploads, setRecentUploads] = useState<UploadedImage[]>([]);
   const [shareStates, setShareStates] = useState<Record<string, ShareInfo>>({});
   const [copied, setCopied] = useState<string | null>(null);
+  const [messages, setMessages] = useState<UploadMessage[]>([]);
+  const dragCounter = useRef(0);
   const inputId = useId();
 
   const statusText = useMemo(() => {
@@ -57,7 +67,57 @@ export default function UploadDropzone() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleDragEnter(event: DragEvent) {
+      if (!uploadsEnabled) return;
+      event.preventDefault();
+      dragCounter.current += 1;
+      setGlobalDragging(true);
+    }
+
+    function handleDragOver(event: DragEvent) {
+      if (!uploadsEnabled) return;
+      event.preventDefault();
+    }
+
+    function handleDragLeave(event: DragEvent) {
+      if (!uploadsEnabled) return;
+      event.preventDefault();
+      dragCounter.current -= 1;
+      if (dragCounter.current <= 0) {
+        setGlobalDragging(false);
+      }
+    }
+
+    function handleDrop(event: DragEvent) {
+      if (!uploadsEnabled) return;
+      event.preventDefault();
+      dragCounter.current = 0;
+      setGlobalDragging(false);
+      const files = event.dataTransfer?.files;
+      if (files && files.length > 0) {
+        void uploadFiles(files);
+      }
+    }
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDrop);
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, [uploadsEnabled]);
+
   async function uploadFiles(files: FileList | File[]) {
+    if (!uploadsEnabled) {
+      setStatus("error");
+      setMessage("Uploads are currently disabled.");
+      return;
+    }
     const items = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (items.length === 0) {
       setStatus("error");
@@ -69,38 +129,36 @@ export default function UploadDropzone() {
     setMessage(null);
 
     for (const file of items) {
-      const formData = new FormData();
-      formData.append("file", file);
-      if (albumId.trim()) {
-        formData.append("albumId", albumId.trim());
-      }
-
-      const response = await fetch("/api/images", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json()) as { error?: string };
-        setStatus("error");
-        setMessage(payload.error ?? "Upload failed.");
-        return;
-      }
-
-      const payload = (await response.json()) as {
-        image: { id: string; baseName: string; ext: string };
+      const result = await uploadSingleImage(file, albumId.trim() || undefined);
+      const entry: UploadMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: result.message,
+        tone: result.ok ? "success" : "error",
       };
-      setRecentUploads((current) => {
-        const next = [
-          {
-            id: payload.image.id,
-            baseName: payload.image.baseName,
-            ext: payload.image.ext,
-          },
-          ...current,
-        ];
-        return next.slice(0, 10);
-      });
+      setMessages((current) => [entry, ...current]);
+      window.setTimeout(() => {
+        setMessages((current) => current.filter((item) => item.id !== entry.id));
+      }, 4000);
+
+      if (!result.ok) {
+        setStatus("error");
+        setMessage(result.message);
+        continue;
+      }
+
+      if (result.image) {
+        setRecentUploads((current) => {
+          const next = [
+            {
+              id: result.image.id,
+              baseName: result.image.baseName,
+              ext: result.image.ext,
+            },
+            ...current,
+          ];
+          return next.slice(0, 10);
+        });
+      }
     }
 
     setStatus("success");
@@ -223,19 +281,23 @@ export default function UploadDropzone() {
       <div
         role="button"
         tabIndex={0}
-        onDragOver={onDragOver}
-        onDragLeave={onDragLeave}
-        onDrop={onDrop}
-        onClick={() => document.getElementById(`${inputId}-file`)?.click()}
+        onDragOver={uploadsEnabled ? onDragOver : undefined}
+        onDragLeave={uploadsEnabled ? onDragLeave : undefined}
+        onDrop={uploadsEnabled ? onDrop : undefined}
+        onClick={
+          uploadsEnabled ? () => document.getElementById(`${inputId}-file`)?.click() : undefined
+        }
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            document.getElementById(`${inputId}-file`)?.click();
+            if (uploadsEnabled) {
+              document.getElementById(`${inputId}-file`)?.click();
+            }
           }
         }}
-        className={`flex min-h-[180px] cursor-pointer flex-col items-center justify-center rounded border border-dashed px-6 py-8 text-center text-sm transition ${
-          isDragging ? "border-black bg-neutral-50" : "border-neutral-300"
-        }`}
+        className={`flex min-h-[180px] flex-col items-center justify-center rounded border border-dashed px-6 py-8 text-center text-sm transition ${
+          uploadsEnabled ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+        } ${isDragging || globalDragging ? "border-black bg-neutral-50" : "border-neutral-300"}`}
       >
         <p className="font-medium">{statusText}</p>
         <p className="mt-2 text-xs text-neutral-500">
@@ -249,12 +311,34 @@ export default function UploadDropzone() {
         accept="image/*"
         multiple
         className="hidden"
+        disabled={!uploadsEnabled}
         onChange={(event) => {
           if (event.target.files?.length) {
             void uploadFiles(event.target.files);
           }
         }}
       />
+
+      {globalDragging ? (
+        <div className="pointer-events-none fixed inset-0 z-40 bg-black/30" />
+      ) : null}
+
+      {messages.length > 0 ? (
+        <div className="fixed top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 space-y-2 px-4">
+          {messages.map((item) => (
+            <div
+              key={item.id}
+              className={`rounded border px-3 py-2 text-xs shadow ${
+                item.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {item.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
 
       {recentUploads.length > 0 ? (
         <div className="space-y-2">

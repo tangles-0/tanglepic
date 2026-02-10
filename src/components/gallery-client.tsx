@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { uploadSingleImage } from "@/lib/upload-client";
 
 type GalleryImage = {
   id: string;
@@ -22,6 +23,12 @@ type ShareInfo = {
   };
 };
 
+type UploadMessage = {
+  id: string;
+  text: string;
+  tone: "success" | "error";
+};
+
 export default function GalleryClient({
   images,
   onImagesChange,
@@ -39,12 +46,56 @@ export default function GalleryClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAlbumId, setSelectedAlbumId] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [globalDragging, setGlobalDragging] = useState(false);
+  const [messages, setMessages] = useState<UploadMessage[]>([]);
+  const dragCounter = useRef(0);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
     setItems(images);
   }, [images]);
+
+  useEffect(() => {
+    function handleDragEnter(event: DragEvent) {
+      event.preventDefault();
+      dragCounter.current += 1;
+      setGlobalDragging(true);
+    }
+
+    function handleDragOver(event: DragEvent) {
+      event.preventDefault();
+    }
+
+    function handleDragLeave(event: DragEvent) {
+      event.preventDefault();
+      dragCounter.current -= 1;
+      if (dragCounter.current <= 0) {
+        setGlobalDragging(false);
+      }
+    }
+
+    function handleDrop(event: DragEvent) {
+      event.preventDefault();
+      dragCounter.current = 0;
+      setGlobalDragging(false);
+      const files = event.dataTransfer?.files;
+      if (files && files.length > 0) {
+        void uploadFiles(files);
+      }
+    }
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDrop);
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, []);
 
   const displayItems = useMemo(
     () =>
@@ -57,6 +108,39 @@ export default function GalleryClient({
   );
 
   const selectedIds = useMemo(() => Array.from(selected), [selected]);
+
+  async function uploadFiles(files: FileList | File[]) {
+    const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    if (itemsToUpload.length === 0) {
+      const entry: UploadMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: "Please drop image files.",
+        tone: "error",
+      };
+      setMessages((current) => [entry, ...current]);
+      window.setTimeout(() => {
+        setMessages((current) => current.filter((item) => item.id !== entry.id));
+      }, 4000);
+      return;
+    }
+
+    for (const file of itemsToUpload) {
+      const result = await uploadSingleImage(file);
+      const entry: UploadMessage = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: result.message,
+        tone: result.ok ? "success" : "error",
+      };
+      setMessages((current) => [entry, ...current]);
+      window.setTimeout(() => {
+        setMessages((current) => current.filter((item) => item.id !== entry.id));
+      }, 4000);
+
+      if (result.ok && result.image) {
+        setItems((current) => [result.image as GalleryImage, ...current]);
+      }
+    }
+  }
 
   async function openModal(image: GalleryImage) {
     setActive(image);
@@ -223,16 +307,33 @@ export default function GalleryClient({
     }
   }, [items, onImagesChange]);
 
-  if (items.length === 0) {
-    return (
-      <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
-        No uploads yet. Head to the upload page to add your first image.
-      </div>
-    );
-  }
-
   return (
     <>
+      {globalDragging ? (
+        <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/30">
+          <div className="rounded border border-dashed border-white px-6 py-4 text-sm text-white">
+            Drop images to upload
+          </div>
+        </div>
+      ) : null}
+
+      {messages.length > 0 ? (
+        <div className="fixed top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 space-y-2 px-4">
+          {messages.map((item) => (
+            <div
+              key={item.id}
+              className={`rounded border px-3 py-2 text-xs shadow ${
+                item.tone === "success"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                  : "border-red-200 bg-red-50 text-red-700"
+              }`}
+            >
+              {item.text}
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       {selectedIds.length > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded border border-neutral-200 px-4 py-2 text-xs">
           <span>{selectedIds.length} selected</span>
@@ -265,49 +366,55 @@ export default function GalleryClient({
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {displayItems.map((image) => (
-          <div
-            key={image.id}
-            className="relative overflow-hidden rounded-md border border-neutral-200 text-left"
-          >
-            {image.shared ? (
-              <span className="absolute right-2 top-2 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
-                Shared
-              </span>
-            ) : null}
-            <label className="absolute left-2 top-2 z-10 rounded bg-white/80 px-2 py-1 text-xs">
-              <input
-                type="checkbox"
-                checked={selected.has(image.id)}
-                onChange={(event) => {
-                  const next = new Set(selected);
-                  if (event.target.checked) {
-                    next.add(image.id);
-                  } else {
-                    next.delete(image.id);
-                  }
-                  setSelected(next);
-                }}
-              />
-            </label>
-            <button type="button" onClick={() => openModal(image)} className="block w-full">
-              <img
-                src={image.thumbUrl}
-                alt="Uploaded"
-                className="h-48 w-full object-cover"
-                loading="lazy"
-              />
-            </button>
-            <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
-              <span className="truncate">{image.baseName}</span>
-              <span>
-                {image.width}×{image.height}
-              </span>
+      {items.length === 0 ? (
+        <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
+          No uploads yet. Drop images anywhere on this page or head to the upload page.
+        </div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {displayItems.map((image) => (
+            <div
+              key={image.id}
+              className="relative overflow-hidden rounded-md border border-neutral-200 text-left"
+            >
+              {image.shared ? (
+                <span className="absolute right-2 top-2 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
+                  Shared
+                </span>
+              ) : null}
+              <label className="absolute left-2 top-2 z-10 rounded bg-white/80 px-2 py-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={selected.has(image.id)}
+                  onChange={(event) => {
+                    const next = new Set(selected);
+                    if (event.target.checked) {
+                      next.add(image.id);
+                    } else {
+                      next.delete(image.id);
+                    }
+                    setSelected(next);
+                  }}
+                />
+              </label>
+              <button type="button" onClick={() => openModal(image)} className="block w-full">
+                <img
+                  src={image.thumbUrl}
+                  alt="Uploaded"
+                  className="h-48 w-full object-cover"
+                  loading="lazy"
+                />
+              </button>
+              <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
+                <span className="truncate">{image.baseName}</span>
+                <span>
+                  {image.width}×{image.height}
+                </span>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
 
       {active ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">

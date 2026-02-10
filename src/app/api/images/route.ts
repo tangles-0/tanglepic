@@ -1,5 +1,12 @@
 import { NextResponse } from "next/server";
-import { addImage, getAlbumForUser, getGroupLimits, getUserGroupInfo, isAdminUser } from "@/lib/metadata-store";
+import {
+  addImage,
+  getAlbumForUser,
+  getAppSettings,
+  getGroupLimits,
+  getUserGroupInfo,
+  isAdminUser,
+} from "@/lib/metadata-store";
 import { storeImageAndThumbnails } from "@/lib/storage";
 import { getSessionUserId } from "@/lib/auth";
 
@@ -46,10 +53,14 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
-  const [groupInfo, isAdmin] = await Promise.all([
+  const [groupInfo, isAdmin, settings] = await Promise.all([
     getUserGroupInfo(userId),
     isAdminUser(userId),
+    getAppSettings(),
   ]);
+  if (!settings.uploadsEnabled) {
+    return NextResponse.json({ error: "Uploads are currently disabled." }, { status: 403 });
+  }
   const [groupLimits, defaultLimits] = await Promise.all([
     getGroupLimits(groupInfo.groupId),
     getGroupLimits(null),

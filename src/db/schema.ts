@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const groups = pgTable("groups", {
   id: text("id").primaryKey(),
@@ -16,12 +16,25 @@ export const groupLimits = pgTable("group_limits", {
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull(),
 });
 
+export const appSettings = pgTable("app_settings", {
+  id: text("id").primaryKey(),
+  motd: text("motd").notNull(),
+  costThisMonth: integer("cost_this_month").notNull(),
+  fundedThisMonth: integer("funded_this_month").notNull(),
+  donateUrl: text("donate_url"),
+  supportEnabled: boolean("support_enabled").notNull().default(true),
+  signupsEnabled: boolean("signups_enabled").notNull().default(true),
+  uploadsEnabled: boolean("uploads_enabled").notNull().default(true),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull(),
+});
+
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
   username: text("username").notNull(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   groupId: text("group_id").references(() => groups.id),
+  theme: text("theme").notNull().default("default"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
   lastLoginAt: timestamp("last_login_at", { mode: "date" }),
 });
