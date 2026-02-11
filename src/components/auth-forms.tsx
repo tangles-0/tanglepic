@@ -15,10 +15,10 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
     setSignUpError(null);
 
     const formData = new FormData(event.currentTarget);
-    const username = formData.get("username")?.toString().trim();
-    const email = formData.get("email")?.toString().trim();
-    const password = formData.get("password")?.toString();
-    const confirmPassword = formData.get("confirmPassword")?.toString();
+    const username = formData.get("signupUsername")?.toString().trim();
+    const email = formData.get("signupEmail")?.toString().trim();
+    const password = formData.get("signupPassword")?.toString();
+    const confirmPassword = formData.get("signupConfirmPassword")?.toString();
 
     if (!username || !email || !password || !confirmPassword) {
       setSignUpError("Username, email, and password are required.");
@@ -98,7 +98,10 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
       <div className="flex flex-wrap gap-2 text-xs">
         <button
           type="button"
-          onClick={() => setMode("login")}
+          onClick={() => {
+            setMode("login");
+            setSignUpError(null);
+          }}
           className={`rounded px-3 py-1 ${
             mode === "login" ? "bg-black text-white" : "border border-neutral-200"
           }`}
@@ -107,7 +110,10 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
         </button>
         <button
           type="button"
-          onClick={() => setMode("signup")}
+          onClick={() => {
+            setMode("signup");
+            setSignInError(null);
+          }}
           className={`rounded px-3 py-1 ${
             mode === "signup" ? "bg-black text-white" : "border border-neutral-200"
           }`}
@@ -118,35 +124,39 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
       </div>
 
       {mode === "signup" ? (
-        <div className="space-y-3">
+        <div key="signup" className="space-y-3">
           <h2 className="text-lg font-medium">Create an account</h2>
           <form onSubmit={handleSignUp} className="space-y-3">
             <input
-              name="username"
+              name="signupUsername"
               type="text"
               placeholder="Display name (min 3 chars)"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="off"
+              className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
             />
             <input
-              name="email"
+              name="signupEmail"
               type="email"
               placeholder="Email"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="off"
+              className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
             />
             <input
-              name="password"
+              name="signupPassword"
               type="password"
               placeholder="Password (letters + numbers)"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="new-password"
+              className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
             />
             <input
-              name="confirmPassword"
+              name="signupConfirmPassword"
               type="password"
               placeholder="Confirm password"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="new-password"
+              className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
             />
             <p className="text-xs text-neutral-500">
@@ -171,20 +181,22 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
           </form>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div key="login" className="space-y-3">
           <h2 className="text-lg font-medium">Sign in</h2>
           <form onSubmit={handleSignIn} className="space-y-3">
             <input
               name="email"
               type="email"
               placeholder="Email"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="email"
+              className="w-full rounded border px-2 py-1"
             />
             <input
               name="password"
               type="password"
               placeholder="Password"
-              className="w-full rounded border px-3 py-2"
+              autoComplete="current-password"
+              className="w-full rounded border px-2 py-1"
             />
             <button className="rounded bg-black px-4 py-2 text-white" type="submit">
               Sign in

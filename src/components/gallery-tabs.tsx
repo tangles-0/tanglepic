@@ -33,6 +33,8 @@ export default function GalleryTabs({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
+  const [albumToDelete, setAlbumToDelete] = useState<AlbumInfo | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const albumPreviews = albumItems.map((album) => {
     const previews = imageItems
@@ -65,6 +67,24 @@ export default function GalleryTabs({
     setAlbumItems((current) => [...current, payload.album].sort((a, b) => a.name.localeCompare(b.name)));
     setNewAlbumName("");
     setIsCreateOpen(false);
+  }
+
+  async function deleteAlbum(album: AlbumInfo) {
+    setDeleteError(null);
+    const response = await fetch(`/api/albums/${album.id}`, { method: "DELETE" });
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      setDeleteError(payload.error ?? "Unable to delete album.");
+      return;
+    }
+
+    setAlbumItems((current) => current.filter((item) => item.id !== album.id));
+    setImageItems((current) =>
+      current.map((image) =>
+        image.albumId === album.id ? { ...image, albumId: undefined } : image,
+      ),
+    );
+    setAlbumToDelete(null);
   }
 
   return (
@@ -111,34 +131,53 @@ export default function GalleryTabs({
               No albums yet. Create one to get started.
             </div>
           ) : (
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,320px))]">
               {albumPreviews.map((album) => (
-                <Link
-                  key={album.id}
-                  href={`/album/${album.id}`}
-                  className="rounded-md border border-neutral-200 p-3"
-                >
-                  <div className="grid grid-cols-3 gap-2">
-                    {album.previews.length > 0 ? (
-                      album.previews.map((image) => (
-                        <img
-                          key={image.id}
-                          src={`/image/${image.id}/${image.baseName}-sm.${image.ext}`}
-                          alt="Album preview"
-                          className="h-20 w-full rounded object-cover"
-                        />
-                      ))
-                    ) : (
-                      <div className="col-span-3 flex h-20 items-center justify-center rounded border border-dashed text-xs text-neutral-400">
-                        No images yet
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-3 text-sm font-medium">{album.name}</div>
-                  <div className="text-xs text-neutral-500">
-                    {album.previews.length} preview{album.previews.length === 1 ? "" : "s"}
-                  </div>
-                </Link>
+                <div key={album.id} className="relative">
+                  <Link
+                    href={`/album/${album.id}`}
+                    className="block rounded-md border border-neutral-200 p-3"
+                  >
+                    <div className="grid grid-cols-3 gap-2">
+                      {album.previews.length > 0 ? (
+                        album.previews.map((image) => (
+                          <img
+                            key={image.id}
+                            src={`/image/${image.id}/${image.baseName}-sm.${image.ext}`}
+                            alt="Album preview"
+                            className="h-20 w-full rounded object-cover"
+                          />
+                        ))
+                      ) : (
+                        <div className="col-span-3 flex h-20 items-center justify-center rounded border border-dashed text-xs text-neutral-400">
+                          No images yet
+                        </div>
+                      )}
+                    </div>
+                    <div className="mt-3 text-sm font-medium">{album.name}</div>
+                    <div className="text-xs text-neutral-500">
+                      {album.previews.length} preview{album.previews.length === 1 ? "" : "s"}
+                    </div>
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setAlbumToDelete({ id: album.id, name: album.name });
+                    }}
+                    className="tile-control absolute right-2 top-2 rounded p-1"
+                    aria-label="Delete album"
+                    title="Delete album"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                      <path
+                        d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 11h12a2 2 0 0 0 2-2V7H4v11a2 2 0 0 0 2 2Z"
+                        fill="currentColor"
+                      />
+                    </svg>
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -173,6 +212,36 @@ export default function GalleryTabs({
                     className="rounded bg-black px-3 py-1 text-xs text-white"
                   >
                     Save
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {albumToDelete ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+              <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
+                <h3 className="text-lg font-semibold">Delete album?</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  This deletes the album only. Images will stay in your library.
+                </p>
+                {deleteError ? (
+                  <p className="mt-2 text-xs text-red-600">{deleteError}</p>
+                ) : null}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAlbumToDelete(null)}
+                    className="rounded border border-neutral-200 px-3 py-1 text-xs"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteAlbum(albumToDelete)}
+                    className="rounded bg-red-600 px-3 py-1 text-xs text-white"
+                  >
+                    Delete album
                   </button>
                 </div>
               </div>

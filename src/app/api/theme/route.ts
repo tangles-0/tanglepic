@@ -4,7 +4,7 @@ import { getUserTheme, setUserTheme } from "@/lib/metadata-store";
 
 export const runtime = "nodejs";
 
-const ALLOWED_THEMES = new Set(["default", "dark", "neon-green", "retro", "cyber", "blood"]);
+const ALLOWED_THEMES = new Set(["default", "author", "dark", "neon-green", "retro", "cyber", "blood"]);
 
 export async function GET(): Promise<NextResponse> {
   const userId = await getSessionUserId();

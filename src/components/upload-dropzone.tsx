@@ -48,6 +48,18 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     return "Drag & drop images here, or click to browse.";
   }, [message, status]);
 
+  function pushMessage(text: string, tone: UploadMessage["tone"]) {
+    const entry: UploadMessage = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      tone,
+    };
+    setMessages((current) => [entry, ...current]);
+    window.setTimeout(() => {
+      setMessages((current) => current.filter((item) => item.id !== entry.id));
+    }, 4000);
+  }
+
   useEffect(() => {
     let isMounted = true;
     async function loadAlbums() {
@@ -130,15 +142,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
 
     for (const file of items) {
       const result = await uploadSingleImage(file, albumId.trim() || undefined);
-      const entry: UploadMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text: result.message,
-        tone: result.ok ? "success" : "error",
-      };
-      setMessages((current) => [entry, ...current]);
-      window.setTimeout(() => {
-        setMessages((current) => current.filter((item) => item.id !== entry.id));
-      }, 4000);
+      pushMessage(result.message, result.ok ? "success" : "error");
 
       if (!result.ok) {
         setStatus("error");
@@ -230,6 +234,31 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     );
   }
 
+  async function deleteRecentUpload(image: UploadedImage) {
+    const response = await fetch("/api/images/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", imageIds: [image.id] }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      pushMessage(payload.error ?? "Unable to delete image.", "error");
+      return;
+    }
+
+    setRecentUploads((current) => current.filter((item) => item.id !== image.id));
+    setShareStates((current) => {
+      if (!(image.id in current)) {
+        return current;
+      }
+      const next = { ...current };
+      delete next[image.id];
+      return next;
+    });
+    pushMessage("Image deleted.", "success");
+  }
+
   function onDragOver(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDragging(true);
@@ -239,12 +268,9 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     setIsDragging(false);
   }
 
-  function onDrop(event: React.DragEvent<HTMLDivElement>) {
+  function onDropVisual(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setIsDragging(false);
-    if (event.dataTransfer.files.length > 0) {
-      void uploadFiles(event.dataTransfer.files);
-    }
   }
 
   return (
@@ -285,7 +311,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
         tabIndex={0}
         onDragOver={uploadsEnabled ? onDragOver : undefined}
         onDragLeave={uploadsEnabled ? onDragLeave : undefined}
-        onDrop={uploadsEnabled ? onDrop : undefined}
+        onDrop={uploadsEnabled ? onDropVisual : undefined}
         onClick={
           uploadsEnabled ? () => document.getElementById(`${inputId}-file`)?.click() : undefined
         }
@@ -368,6 +394,20 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
                       className="rounded border border-neutral-200 px-2 py-1 text-[11px]"
                     >
                       {copied === image.id ? "Copied" : "Copy link"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void deleteRecentUpload(image)}
+                      className="rounded border border-neutral-200 p-1 text-neutral-500"
+                      aria-label="Delete image"
+                      title="Delete image"
+                    >
+                      <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                        <path
+                          d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 11h12a2 2 0 0 0 2-2V7H4v11a2 2 0 0 0 2 2Z"
+                          fill="currentColor"
+                        />
+                      </svg>
                     </button>
                   </div>
                 </div>

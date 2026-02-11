@@ -107,6 +107,32 @@ export async function getAlbumForUser(
   };
 }
 
+export async function deleteAlbumForUser(
+  albumId: string,
+  userId: string,
+): Promise<boolean> {
+  const album = await getAlbumForUser(albumId, userId);
+  if (!album) {
+    return false;
+  }
+
+  await db
+    .update(images)
+    .set({ albumId: null })
+    .where(and(eq(images.userId, userId), eq(images.albumId, albumId)));
+
+  await db
+    .delete(albumShares)
+    .where(and(eq(albumShares.albumId, albumId), eq(albumShares.userId, userId)));
+
+  const result = await db
+    .delete(albums)
+    .where(and(eq(albums.id, albumId), eq(albums.userId, userId)))
+    .returning({ id: albums.id });
+
+  return result.length > 0;
+}
+
 export async function getAlbumPublic(albumId: string): Promise<Album | undefined> {
   const [row] = await db
     .select()

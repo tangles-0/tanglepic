@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getUserTheme } from "@/lib/metadata-store";
 import { ThemeProvider } from "@/components/theme-provider";
+import FloatingThemeSelector from "@/components/floating-theme-selector";
 
 export const metadata = {
   title: "TanglePic",
@@ -38,6 +39,7 @@ export default async function RootLayout({
       ) : null}
       <body className="min-h-screen bg-white text-neutral-900">
         <ThemeProvider initialTheme={theme} preferLocalStorage={!userId}>
+          <FloatingThemeSelector />
           {children}
         </ThemeProvider>
       </body>

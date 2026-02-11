@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
 type AlbumImage = {
   id: string;
@@ -226,22 +227,20 @@ export default function AlbumView({
                   Shared
                 </span>
               ) : null}
-              <label className="flex items-center gap-2 text-xs text-neutral-500">
-                <input
-                  type="checkbox"
-                  checked={selected.has(image.id)}
-                  onChange={(event) => {
-                    const next = new Set(selected);
-                    if (event.target.checked) {
-                      next.add(image.id);
-                    } else {
-                      next.delete(image.id);
-                    }
-                    setSelected(next);
-                  }}
-                />
-                Select
-              </label>
+              <FancyCheckbox
+                label="Select"
+                className="text-xs text-neutral-500"
+                checked={selected.has(image.id)}
+                onChange={(checked) => {
+                  const next = new Set(selected);
+                  if (checked) {
+                    next.add(image.id);
+                  } else {
+                    next.delete(image.id);
+                  }
+                  setSelected(next);
+                }}
+              />
               <img
                 src={`/image/${image.id}/${image.baseName}-lg.${image.ext}`}
                 alt="Album image"

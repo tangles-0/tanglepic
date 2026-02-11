@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 const THEME_STORAGE_KEY = "tanglepic-theme";
-const ALLOWED_THEMES = new Set(["default", "dark", "neon-green", "retro", "cyber", "blood"]);
+const ALLOWED_THEMES = new Set(["default", "author", "dark", "neon-green", "retro", "cyber", "blood"]);
 
 type ThemeContextValue = {
   theme: string;

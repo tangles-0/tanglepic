@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadSingleImage } from "@/lib/upload-client";
+import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
 type GalleryImage = {
   id: string;
@@ -46,6 +47,8 @@ export default function GalleryClient({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAlbumId, setSelectedAlbumId] = useState("");
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [imageToDelete, setImageToDelete] = useState<GalleryImage | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [globalDragging, setGlobalDragging] = useState(false);
   const [messages, setMessages] = useState<UploadMessage[]>([]);
   const dragCounter = useRef(0);
@@ -301,6 +304,35 @@ export default function GalleryClient({
     setIsAddModalOpen(false);
   }
 
+  async function deleteSingleImage(image: GalleryImage) {
+    setDeleteError(null);
+    const response = await fetch("/api/images/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "delete", imageIds: [image.id] }),
+    });
+
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      setDeleteError(payload.error ?? "Unable to delete image.");
+      return;
+    }
+
+    setItems((current) => current.filter((item) => item.id !== image.id));
+    setSelected((current) => {
+      if (!current.has(image.id)) {
+        return current;
+      }
+      const next = new Set(current);
+      next.delete(image.id);
+      return next;
+    });
+    if (active?.id === image.id) {
+      closeModal();
+    }
+    setImageToDelete(null);
+  }
+
   useEffect(() => {
     if (onImagesChange) {
       onImagesChange(items);
@@ -371,32 +403,44 @@ export default function GalleryClient({
           No uploads yet. Drop images anywhere on this page or head to the upload page.
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,320px))]">
           {displayItems.map((image) => (
             <div
               key={image.id}
               className="gallery-tile relative overflow-hidden rounded-md border border-neutral-200 text-left"
             >
               {image.shared ? (
-                <span className="absolute right-2 top-2 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
+                <span className="absolute left-2 top-11 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
                   Shared
                 </span>
               ) : null}
-              <label className="absolute left-2 top-2 z-10 rounded bg-white/80 px-2 py-1 text-xs">
-                <input
-                  type="checkbox"
-                  checked={selected.has(image.id)}
-                  onChange={(event) => {
-                    const next = new Set(selected);
-                    if (event.target.checked) {
-                      next.add(image.id);
-                    } else {
-                      next.delete(image.id);
-                    }
-                    setSelected(next);
-                  }}
-                />
-              </label>
+              <FancyCheckbox
+                className="tile-control absolute left-2 top-2 z-10 text-xs"
+                checked={selected.has(image.id)}
+                onChange={(checked) => {
+                  const next = new Set(selected);
+                  if (checked) {
+                    next.add(image.id);
+                  } else {
+                    next.delete(image.id);
+                  }
+                  setSelected(next);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => setImageToDelete(image)}
+                className="tile-control absolute right-2 top-2 z-10 rounded p-1"
+                aria-label="Delete image"
+                title="Delete image"
+              >
+                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+                  <path
+                    d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 11h12a2 2 0 0 0 2-2V7H4v11a2 2 0 0 0 2 2Z"
+                    fill="currentColor"
+                  />
+                </svg>
+              </button>
               <button type="button" onClick={() => openModal(image)} className="block w-full">
                 <img
                   src={image.thumbUrl}
@@ -568,6 +612,36 @@ export default function GalleryClient({
                 className="rounded bg-black px-3 py-1 text-xs text-white"
               >
                 Add
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {imageToDelete ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+          <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
+            <h3 className="text-lg font-semibold">Delete image?</h3>
+            <p className="mt-1 text-xs text-neutral-500">
+              This will permanently delete the image and its share links.
+            </p>
+            {deleteError ? (
+              <p className="mt-2 text-xs text-red-600">{deleteError}</p>
+            ) : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setImageToDelete(null)}
+                className="rounded border border-neutral-200 px-3 py-1 text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void deleteSingleImage(imageToDelete)}
+                className="rounded bg-red-600 px-3 py-1 text-xs text-white"
+              >
+                Delete image
               </button>
             </div>
           </div>

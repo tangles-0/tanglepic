@@ -39,16 +39,16 @@ export default async function Home() {
 
       <section className="rounded-md border border-neutral-200 p-4 text-sm">
         <h2 className="text-lg font-medium">Message of the day</h2>
-        <p className="mt-2 text-neutral-600">{settings.motd}</p>
+        <p className="mt-2 text-xs text-neutral-600">{settings.motd}</p>
       </section>
 
       {userId ? (
         <section className="space-y-2 rounded-md border border-neutral-200 p-4 text-sm">
           <h2 className="text-lg font-medium">Welcome back</h2>
-          <p className="text-neutral-600">
+          <p className="text-xs text-neutral-600">
             Logged in as {session?.user?.email ?? session?.user?.name ?? "user"}.
           </p>
-          <p className="text-neutral-600">
+          <p className="text-xs text-neutral-600">
             You have {userStats?.imageCount ?? 0} images uploaded using{" "}
             {formatBytes(userStats?.totalBytes ?? 0)} of disk space.
           </p>
@@ -75,7 +75,7 @@ export default async function Home() {
       {settings.supportEnabled ? (
         <section className="space-y-3 rounded-md border border-neutral-200 p-4">
           <h2 className="text-lg font-medium">Support this project</h2>
-          <p className="text-neutral-600">
+          <p className="text-xs text-neutral-600">
             This site is developed and maintained by a single dev. If you found it useful, please
             consider supporting it :)
           </p>
@@ -114,7 +114,7 @@ export default async function Home() {
 
       <section className="space-y-2 rounded-md border border-neutral-200 p-4">
         <h2 className="text-lg font-medium"><span className="text-emerald-500 animate-pulse">Hot tip:</span> Share link format</h2>
-        <p className="text-neutral-600">
+        <p className="text-xs text-neutral-600">
           After creating a share link, append <code>-sm</code> or <code>-lg</code> before the file
           extension for thumbnails.
         </p>
