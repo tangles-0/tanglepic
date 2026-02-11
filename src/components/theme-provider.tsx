@@ -68,6 +68,12 @@ export function ThemeProvider({
     if (!ALLOWED_THEMES.has(next)) return;
     const previous = theme;
     setThemeState(next);
+    // If we're in "local storage preferred" mode (logged out), don't attempt DB sync.
+    // We still persist to localStorage via the effect above.
+    if (preferLocalStorage) {
+      return;
+    }
+
     setIsSaving(true);
     try {
       const response = await fetch("/api/theme", {
@@ -75,6 +81,10 @@ export function ThemeProvider({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ theme: next }),
       });
+      if (response.status === 401) {
+        // Not logged in (or session expired). Keep local theme; skip DB sync.
+        return;
+      }
       if (!response.ok) {
         setThemeState(previous);
       }
