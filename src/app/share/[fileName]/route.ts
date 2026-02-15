@@ -5,6 +5,19 @@ import { unavailableImageResponse } from "@/lib/unavailable-image";
 
 export const runtime = "nodejs";
 
+function withPublicImageCors(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  headers.set("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+  headers.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 function parseFileName(fileName: string): {
   code: string;
   size: "original" | "sm" | "lg";
@@ -67,20 +80,20 @@ export async function GET(
           headers,
         });
       }
-      return new Response("Not found", { status: 404 });
+      return withPublicImageCors(new Response("Not found", { status: 404 }));
     }
     if (!parsed) {
-      return unavailableImageResponse("png");
+      return withPublicImageCors(await unavailableImageResponse("png"));
     }
 
     const share = await getShareByCode(parsed.code);
     if (!share) {
-      return unavailableImageResponse(parsed.ext);
+      return withPublicImageCors(await unavailableImageResponse(parsed.ext));
     }
 
     const image = await getImage(share.imageId);
     if (!image || image.ext !== parsed.ext) {
-      return unavailableImageResponse(parsed.ext);
+      return withPublicImageCors(await unavailableImageResponse(parsed.ext));
     }
 
     const data = await getImageBuffer(
@@ -89,7 +102,7 @@ export async function GET(
       parsed.size,
       new Date(image.uploadedAt),
     );
-    return new Response(new Uint8Array(data), {
+    return withPublicImageCors(new Response(new Uint8Array(data), {
       headers: {
         "Content-Type": contentTypeForExt(image.ext),
         "Cache-Control": "private, no-store, max-age=0, must-revalidate",
@@ -97,12 +110,12 @@ export async function GET(
         Expires: "0",
         Vary: "Cookie, Authorization",
       },
-    });
+    }));
   } catch {
     if (!parsed) {
-      return new Response("Service temporarily unavailable.", { status: 503 });
+      return withPublicImageCors(new Response("Service temporarily unavailable.", { status: 503 }));
     }
-    return unavailableImageResponse(parsed.ext);
+    return withPublicImageCors(await unavailableImageResponse(parsed.ext));
   }
 }
 
