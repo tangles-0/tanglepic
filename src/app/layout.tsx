@@ -17,7 +17,7 @@ export default async function RootLayout({
 }) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | undefined)?.id;
-  const theme = userId ? await getUserTheme(userId) : "default";
+  const theme = userId ? await getUserTheme(userId) : "dark";
 
   return (
     <html lang="en" data-theme={theme} suppressHydrationWarning={true}>

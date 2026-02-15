@@ -833,7 +833,7 @@ export async function getUserTheme(userId: string): Promise<string> {
     .where(eq(users.id, userId))
     .limit(1);
 
-  return row?.theme ?? "default";
+  return row?.theme === "default" ? "dark" : row?.theme ?? "dark";
 }
 
 export async function setUserTheme(userId: string, theme: string): Promise<void> {

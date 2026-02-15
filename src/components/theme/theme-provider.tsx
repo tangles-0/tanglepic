@@ -36,7 +36,7 @@ export function ThemeProvider({
       try {
         const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
         if (stored && THEME_SET.has(stored)) {
-          next = stored;
+          next = stored === "default" ? "dark" : stored;
           setThemeState(stored);
         }
       } catch {
@@ -109,7 +109,7 @@ export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
   if (!context) {
     return {
-      theme: "default",
+      theme: "dark",
       isSaving: false,
       setTheme: async () => undefined,
     };
