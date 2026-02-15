@@ -23,7 +23,7 @@ export default function SignOutActions({ callbackUrl }: SignOutActionsProps) {
       className="rounded bg-black px-4 py-2 text-white disabled:cursor-not-allowed disabled:opacity-60"
       disabled={isSigningOut}
     >
-      {isSigningOut ? "Signing out..." : "Sign out"}
+      {isSigningOut ? "signing out... (lame)" : "sign out"}
     </button>
   );
 }

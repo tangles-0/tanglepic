@@ -1,11 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
-type TextLinkVariant = "muted" | "default";
+type TextLinkVariant = "muted" | "default" | "loud";
 
 const VARIANT_STYLES: Record<TextLinkVariant, string> = {
   muted: "text-neutral-500",
   default: "text-neutral-700",
+  loud: "text-emerald-900",
 };
 
 export default function TextLink({

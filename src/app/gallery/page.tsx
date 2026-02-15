@@ -24,26 +24,26 @@ export default async function GalleryPage({
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "images";
-  const pageTitle = initialTab === "albums" ? "Your albums" : "Your gallery";
+  const pageTitle = initialTab === "albums" ? "ur albums" : "ur gallery";
 
   return (
     <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
       <PageHeader
         title={pageTitle}
         subtitle={`${images.length} image${images.length === 1 ? "" : "s"} uploaded.`}
-        backLink={{ href: "/", label: "Back to home" }}
+        backLink={{ href: "/", label: "cd .. (home)" }}
         actions={
           <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
             <TextLink href="/upload" className="text-sm">
-              Upload images
+              upload imgs
             </TextLink>
             {isAdmin ? (
               <TextLink href="/admin" className="text-sm">
-                Admin
+                admin
               </TextLink>
             ) : null}
             <TextLink href="/signout" className="text-sm">
-              Sign out
+              sign out (u quitin?)
             </TextLink>
           </div>
         }

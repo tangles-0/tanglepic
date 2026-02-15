@@ -149,8 +149,8 @@ export default function AlbumView({
           Album sharing: {shareEnabled ? "enabled" : "disabled"}
         </span>
         {shareEnabled ? (
-          <span className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
-            Album shared
+          <span className="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+            album shared
           </span>
         ) : null}
         <button
@@ -223,8 +223,8 @@ export default function AlbumView({
           return (
             <div key={image.id} className="rounded-md border border-neutral-200 p-4">
               {image.shared ? (
-                <span className="mb-2 inline-flex rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
-                  Shared
+                <span className="mb-2 inline-flex rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+                  shared
                 </span>
               ) : null}
               <FancyCheckbox

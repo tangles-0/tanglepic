@@ -21,29 +21,29 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
     const confirmPassword = formData.get("signupConfirmPassword")?.toString();
 
     if (!username || !email || !password || !confirmPassword) {
-      setSignUpError("Username, email, and password are required.");
+      setSignUpError("bruh");
       return;
     }
 
     const emailRegex =
       /^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
     if (!emailRegex.test(email)) {
-      setSignUpError("Email format is invalid.");
+      setSignUpError("ur email addy is invalid. idc if its real but have chars@chars.smth");
       return;
     }
 
     if (username.length < 3) {
-      setSignUpError("Username must be at least 3 characters.");
+      setSignUpError("ur handle must be at least 3 chars");
       return;
     }
 
     if (password.length <= 6 || !/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
-      setSignUpError("Password must be >6 chars and include letters and numbers.");
+      setSignUpError("pw must be >6 chars and include letters and numbers. u didn't actually thing love sex secret god are valid passwords did u?");
       return;
     }
 
     if (password !== confirmPassword) {
-      setSignUpError("Passwords do not match.");
+      setSignUpError("pwz dont match.");
       return;
     }
 
@@ -106,7 +106,7 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
             mode === "login" ? "bg-black text-white" : "border border-neutral-200"
           }`}
         >
-          Login
+          login
         </button>
         <button
           type="button"
@@ -119,18 +119,18 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
           }`}
           disabled={!signupsEnabled}
         >
-          Sign up
+          create acct
         </button>
       </div>
 
       {mode === "signup" ? (
         <div key="signup" className="space-y-3">
-          <h2 className="text-lg font-medium">Create an account</h2>
+          <h2 className="text-lg font-medium">a newb has joined the party</h2>
           <form onSubmit={handleSignUp} className="space-y-3">
             <input
               name="signupUsername"
               type="text"
-              placeholder="Display name (min 3 chars)"
+              placeholder="ur handle (min 3 chars) eg. zer0_c00l"
               autoComplete="off"
               className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
@@ -138,7 +138,7 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
             <input
               name="signupEmail"
               type="email"
-              placeholder="Email"
+              placeholder="ur email addy"
               autoComplete="off"
               className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
@@ -146,7 +146,7 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
             <input
               name="signupPassword"
               type="password"
-              placeholder="Password (letters + numbers)"
+              placeholder="ur pw (letters + numbers) eg. love, sex, secret, god"
               autoComplete="new-password"
               className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
@@ -154,21 +154,20 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
             <input
               name="signupConfirmPassword"
               type="password"
-              placeholder="Confirm password"
+              placeholder="confirm ur pw"
               autoComplete="new-password"
               className="w-full rounded border px-2 py-1"
               disabled={!signupsEnabled}
             />
             <p className="text-xs text-neutral-500">
-              We never send emails or share them. They are only used for account recovery — use a
-              fake one if you want.
+              ill never send emails or share them bcoz im not a creep. use a fake one if u want. i mite use the email for acct recovery if u forget ur pw.
             </p>
             <button
               className="rounded bg-black px-4 py-2 text-white"
               type="submit"
               disabled={!signupsEnabled}
             >
-              Sign up
+              speak friend and enter
             </button>
             {!signupsEnabled ? (
               <p className="text-xs text-neutral-500">
@@ -182,24 +181,24 @@ export default function AuthForms({ signupsEnabled }: { signupsEnabled: boolean 
         </div>
       ) : (
         <div key="login" className="space-y-3">
-          <h2 className="text-lg font-medium">Sign in</h2>
+          <h2 className="text-lg font-medium">the legend returns</h2>
           <form onSubmit={handleSignIn} className="space-y-3">
             <input
               name="email"
               type="email"
-              placeholder="Email"
+              placeholder="ur email addy"
               autoComplete="email"
               className="w-full rounded border px-2 py-1"
             />
             <input
               name="password"
               type="password"
-              placeholder="Password"
+              placeholder="ur pw"
               autoComplete="current-password"
               className="w-full rounded border px-2 py-1"
             />
             <button className="rounded bg-black px-4 py-2 text-white" type="submit">
-              Sign in
+              let me in already
             </button>
             {signInError ? (
               <p className="text-xs text-red-600">{signInError}</p>

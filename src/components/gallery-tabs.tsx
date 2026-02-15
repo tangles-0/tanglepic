@@ -44,6 +44,7 @@ export default function GalleryTabs({
   const [albumToDelete, setAlbumToDelete] = useState<AlbumInfo | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [hideAlbumImages, setHideAlbumImages] = useState(false);
+  const [delBtnLabel, setDelBtnLabel] = useState("del album");
 
   useEffect(() => {
     try {
@@ -140,7 +141,7 @@ export default function GalleryTabs({
             activeTab === "albums" ? "bg-black text-white" : "border border-neutral-200"
           }`}
         >
-          Albums
+          albums
         </button>
         <button
           type="button"
@@ -149,7 +150,7 @@ export default function GalleryTabs({
             activeTab === "images" ? "bg-black text-white" : "border border-neutral-200"
           }`}
         >
-          Images
+          imgs
         </button>
         {activeTab === "images" ? (
           <button
@@ -157,7 +158,7 @@ export default function GalleryTabs({
             onClick={() => setHideAlbumImages((current) => !current)}
             className="rounded border border-neutral-200 px-3 py-1"
           >
-            {hideAlbumImages ? "Show images in albums" : "Hide images in albums"}
+            {hideAlbumImages ? "show album imgs" : "hide album imgs"}
           </button>
         ) : null}
         {activeTab === "albums" ? (
@@ -169,7 +170,7 @@ export default function GalleryTabs({
             }}
             className="rounded border border-neutral-200 px-3 py-1"
           >
-            Create album
+            + new
           </button>
         ) : null}
       </div>
@@ -178,7 +179,7 @@ export default function GalleryTabs({
         <div className="space-y-4">
           {albumPreviews.length === 0 ? (
             <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
-              No albums yet. Create one to get started.
+              no albums yet. make one to get started.
             </div>
           ) : (
             <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,320px))]">
@@ -194,13 +195,13 @@ export default function GalleryTabs({
                           <img
                             key={image.id}
                             src={`/image/${image.id}/${image.baseName}-sm.${image.ext}`}
-                            alt="Album preview"
+                            alt="album preview"
                             className="h-20 w-full rounded object-cover"
                           />
                         ))
                       ) : (
                         <div className="col-span-3 flex h-20 items-center justify-center rounded border border-dashed text-xs text-neutral-400">
-                          No images yet
+                          no imgs yet. go snap some selfiez or smth
                         </div>
                       )}
                     </div>
@@ -217,8 +218,8 @@ export default function GalleryTabs({
                       setAlbumToDelete({ id: album.id, name: album.name });
                     }}
                     className="tile-control absolute right-2 top-2 rounded p-1"
-                    aria-label="Delete album"
-                    title="Delete album"
+                    aria-label="delete album"
+                    title="rm -rf this album"
                   >
                     <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
                       <path
@@ -235,13 +236,13 @@ export default function GalleryTabs({
           {isCreateOpen ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
               <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
-                <h3 className="text-lg font-semibold">Create album</h3>
+                <h3 className="text-lg font-semibold">new album</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  Give the album a short name.
+                  give the album a nice name. like geoff
                 </p>
                 <input
                   className="mt-4 w-full rounded border px-3 py-2"
-                  placeholder="Album name"
+                  placeholder="album name"
                   value={newAlbumName}
                   onChange={(event) => setNewAlbumName(event.target.value)}
                 />
@@ -254,14 +255,14 @@ export default function GalleryTabs({
                     onClick={() => setIsCreateOpen(false)}
                     className="rounded border border-neutral-200 px-3 py-1 text-xs"
                   >
-                    Cancel
+                    cancel
                   </button>
                   <button
                     type="button"
                     onClick={() => void createAlbum()}
                     className="rounded bg-black px-3 py-1 text-xs text-white"
                   >
-                    Save
+                    mk new album
                   </button>
                 </div>
               </div>
@@ -271,9 +272,9 @@ export default function GalleryTabs({
           {albumToDelete ? (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
               <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
-                <h3 className="text-lg font-semibold">Delete album?</h3>
+                <h3 className="text-lg font-semibold">delete album?</h3>
                 <p className="mt-1 text-xs text-neutral-500">
-                  This deletes the album only. Images will stay in your library.
+                  this deletes the album only. imgs will stay in ur library. 0.5% chance of nuclear winter.
                 </p>
                 {deleteError ? (
                   <p className="mt-2 text-xs text-red-600">{deleteError}</p>
@@ -284,14 +285,16 @@ export default function GalleryTabs({
                     onClick={() => setAlbumToDelete(null)}
                     className="rounded border border-neutral-200 px-3 py-1 text-xs"
                   >
-                    Cancel
+                    cancel
                   </button>
                   <button
                     type="button"
                     onClick={() => void deleteAlbum(albumToDelete)}
                     className="rounded bg-red-600 px-3 py-1 text-xs text-white"
+                    onMouseEnter={() => setDelBtnLabel("del entire acct (jk)")}
+                    onMouseLeave={() => setDelBtnLabel("del album")}
                   >
-                    Delete album
+                    {delBtnLabel}
                   </button>
                 </div>
               </div>

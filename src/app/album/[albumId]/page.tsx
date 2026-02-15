@@ -30,11 +30,11 @@ export default async function AlbumPage({
       <PageHeader
         title={album.name}
         subtitle={`${images.length} image${images.length === 1 ? "" : "s"} in this album.`}
-        backLink={{ href: "/gallery?tab=albums", label: "Return to albums" }}
+        backLink={{ href: "/gallery?tab=albums", label: "cd .. (albums)" }}
       >
         {images.length === 0 ? (
           <p className="text-xs text-neutral-500">
-            Go to the Images tab, select images, then choose “Add to album”.
+            go 2 the imgs tab, select some imgs, then choose “add 2 album”.
           </p>
         ) : null}
       </PageHeader>

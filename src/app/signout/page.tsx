@@ -15,26 +15,26 @@ export default async function SignOutPage() {
         <Link href={backHref} className="text-xs text-neutral-500 underline">
           {backLabel}
         </Link>
-        <h1 className="text-2xl font-semibold">Sign out</h1>
+        <h1 className="text-2xl font-semibold">sign out</h1>
         <p className="text-neutral-600">
           {email
-            ? `You're signed in as ${email}.`
+            ? `ur signed in as ${email}.`
             : "You're already signed out. Head back home when you're ready."}
         </p>
       </header>
 
       <section className="space-y-4 rounded-md border border-neutral-200 p-4">
         <div className="space-y-2">
-          <h2 className="text-lg font-medium">Confirm sign out</h2>
+          <h2 className="text-lg font-medium">confirm u r lame</h2>
           <p className="text-neutral-600">
-            Signing out will end your session on this device.
+            signing out will end ur session at this battlestation
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {email ? <SignOutActions callbackUrl="/" /> : null}
           <Link href="/" className="text-xs text-neutral-500 underline">
-            Return to home
+            &lt; back 2 home
           </Link>
         </div>
       </section>

@@ -4,6 +4,8 @@ import { getAppSettings, getUserUploadStats } from "@/lib/metadata-store";
 import AuthForms from "@/components/auth-forms";
 import AlertBanner from "@/components/ui/alert-banner";
 import TextLink from "@/components/ui/text-link";
+import { BrandsGithub } from '@energiz3r/icon-library/Icons/Brands/BrandsGithub';
+import Link from "next/link";
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
@@ -34,34 +36,43 @@ export default async function Home() {
           <img src="/latex-logo.png" alt="TanglePic"  width="24px" />
         
         </div> */}
-        <h1 className="text-2xl font-semibold">LaTeX</h1>
+        <h1 className="text-2xl font-semibold">LaTeX <span className="font-medium">img_srv:/$</span></h1>
         <p className="text-neutral-600">
-          Create an account to upload images, organize albums, and generate direct share
-          links.
+          create acct to upload imgs, mkdir albums, and create symlinks to send to frendz/foez
         </p>
       </header>
 
-      <section className="rounded-md border border-neutral-200 p-4 text-sm">
-        <h2 className="text-lg font-medium">Message of the day</h2>
+      <section className="rounded-md border border-neutral-200 p-4 text-sm relative">
+        <h2 className="text-lg font-medium">patch notes</h2>
         <p className="mt-2 text-xs text-neutral-600">{settings.motd}</p>
+        <div className="absolute top-0 right-0">
+          <Link
+            href="https://github.com/tangles-0/tanglepic"
+            target="_blank"
+            rel="noopener noreferrer"
+
+          >
+            <BrandsGithub className="p-2 h-10 w-10" fill="currentColor" />
+          </Link>
+        </div>
       </section>
 
       {userId ? (
         <section className="space-y-2 rounded-md border border-neutral-200 p-4 text-sm">
-          <h2 className="text-lg font-medium">Welcome back</h2>
+          <h2 className="text-lg font-medium">I C U AGAIN</h2>
           <p className="text-xs text-neutral-600">
-            Logged in as {session?.user?.email ?? session?.user?.name ?? "user"}.
+            u r <span className="font-bold">{session?.user?.email ?? session?.user?.name ?? "user"}</span>. wb &lt;3
           </p>
           <p className="text-xs text-neutral-600">
-            You have {userStats?.imageCount ?? 0} images uploaded using{" "}
-            {formatBytes(userStats?.totalBytes ?? 0)} of disk space.
+            u hav {userStats?.imageCount ?? 0} imgs uploaded using{" "}
+            {formatBytes(userStats?.totalBytes ?? 0)} of spinning rust
           </p>
           <TextLink
             href="/gallery"
-            variant="default"
+            variant="loud"
             className="inline-flex items-center gap-1 text-lg font-medium"
           >
-            Click here to go to your gallery <span aria-hidden="true">&gt;</span>
+            clk here 2 go 2 ur gallery <span aria-hidden="true">&gt;</span>
           </TextLink>
         </section>
       ) : (
@@ -78,7 +89,7 @@ export default async function Home() {
 
       {settings.supportEnabled ? (
         <section className="space-y-3 rounded-md border border-neutral-200 p-4">
-          <h2 className="text-lg font-medium">Support this project</h2>
+          <h2 className="text-lg font-medium">Support this thing</h2>
           <p className="text-xs text-neutral-600">
             This site is developed and maintained by a single dev. If you found it useful, please
             consider supporting it :)
@@ -117,14 +128,14 @@ export default async function Home() {
       ) : null}
 
       <section className="space-y-2 rounded-md border border-neutral-200 p-4">
-        <h2 className="text-lg font-medium"><span className="text-emerald-500 animate-pulse">Hot tip:</span> Share link format</h2>
+        <h2 className="text-lg font-medium"><span className="text-emerald-500 animate-pulse">pro tip:</span> thumbnail links</h2>
         <p className="text-xs text-neutral-600">
-          After creating a share link, append <code>-sm</code> or <code>-lg</code> before the file
+          creat a share link, then append <code>-sm</code> or <code>-lg</code> before the file
           extension for thumbnails.
         </p>
         <p className="text-neutral-500 text-xs">
-          Example: <code>/share/&lt;shareId&gt;/&lt;file&gt;.png</code>,{" "}
-          <code>/share/&lt;shareId&gt;/&lt;file&gt;-sm.png</code>
+          eg: <code>/share/&lt;file&gt;.png</code>{" "} becomes {" "}
+          <code>/share/&lt;file&gt;-sm.png</code>
         </p>
       </section>
     </main>

@@ -75,47 +75,54 @@ export default function AlbumShareControls({ albumId }: { albumId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-neutral-200 px-4 py-3 text-xs">
-        <span className="text-neutral-600">Album sharing: {shareEnabled ? "enabled" : "disabled"}</span>
-        {shareEnabled ? (
-          <span className="rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
-            Album shared
-          </span>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => {
-            void (shareEnabled ? disableShares() : enableShares());
-          }}
-          className={`rounded px-3 py-1 text-xs ${
-            shareEnabled ? "bg-black text-white" : "border border-neutral-200"
-          }`}
-        >
-          {shareEnabled ? "Disable" : "Enable"}
-        </button>
-      </div>
+      <div className="flex flex-col gap-6 rounded border border-neutral-200 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3  text-xs">
 
-      {shareEnabled && shareUrl ? (
-        <div className="rounded border border-neutral-200 px-4 py-3 text-xs">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-neutral-600">Album share link</span>
-            <button
-              type="button"
-              onClick={() => void copyLink()}
-              className="rounded border border-neutral-200 px-3 py-1 text-xs"
-            >
-              Copy link
-            </button>
-          </div>
-          <div className="mt-2 break-all text-xs">
-            {origin}
-            {shareUrl}
-          </div>
-          {copied ? <span className="text-[11px] text-emerald-600">Copied</span> : null}
+          <span className="text-neutral-600">sharing: {shareEnabled ? "enabled" : "disabled"}</span>
+          {shareEnabled ? (
+            <span className="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+              album shared
+            </span>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => {
+              void (shareEnabled ? disableShares() : enableShares());
+            }}
+            className={`rounded px-3 py-1 text-xs ${shareEnabled ? "bg-black text-white" : "border border-neutral-200"
+              }`}
+          >
+            {shareEnabled ? "disable" : "enable"}
+          </button>
         </div>
-      ) : null}
 
-      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+
+        {shareEnabled && shareUrl ? (
+          <div className="text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-3" onClick={() => void copyLink()}>
+              <div>
+                <span className="text-neutral-600">album link: </span>
+                <span className="break-all text-xs font-bold">
+                  {origin}
+                  {shareUrl}
+                </span>
+                {copied ? <span className="ml-2 text-emerald-600">Copied</span> : null}
+              </div>
+              <button
+                type="button"
+                onClick={() => void copyLink()}
+                className="rounded border border-neutral-200 px-3 py-1 text-xs"
+              >
+                copy link {copied ? <span className="ml-2 text-emerald-600">kk</span> : null}
+              </button>
+            </div>
+
+            
+          </div>
+        ) : null}
+
+        {error ? <p className="text-xs text-red-600">{error}</p> : null}
+      </div>
     </div>
   );
 }

@@ -30,10 +30,10 @@ export default async function UploadPage() {
 
       <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
         <TextLink href="/gallery" className="text-sm">
-          Back to gallery
+          &lt; back 2 gallery
         </TextLink>
         <TextLink href="/signout" className="text-sm">
-          Sign out
+          sign out
         </TextLink>
       </div>
     </main>

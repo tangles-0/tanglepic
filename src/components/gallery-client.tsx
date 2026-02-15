@@ -4,6 +4,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadSingleImage } from "@/lib/upload-client";
 import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
+import { LightCaretRight } from '@energiz3r/icon-library/Icons/Light/LightCaretRight';
+import { LightCaretLeft } from '@energiz3r/icon-library/Icons/Light/LightCaretLeft';
+import { LightTimes } from '@energiz3r/icon-library/Icons/Light/LightTimes';
+import { LightDownload } from '@energiz3r/icon-library/Icons/Light/LightDownload';
+
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
 
 type GalleryImage = {
@@ -538,8 +543,8 @@ export default function GalleryClient({
               className="gallery-tile relative overflow-hidden rounded-md border border-neutral-200 text-left"
             >
               {image.shared ? (
-                <span className="absolute left-2 top-11 z-10 rounded bg-emerald-600 px-2 py-1 text-[10px] font-medium text-white">
-                  Shared
+                <span className="absolute left-2 top-11 z-10 rounded bg-emerald-600 px-2 py-1 font-medium text-white">
+                  shared
                 </span>
               ) : null}
               <FancyCheckbox
@@ -589,11 +594,24 @@ export default function GalleryClient({
       )}
 
       {active ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6" onKeyDown={(event) => {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            openPreviousImage();
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            openNextImage();
+          }
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeModal();
+          }
+        }}>
           <div className="max-h-full w-full max-w-3xl overflow-y-auto overflow-x-hidden rounded-md bg-white p-6 text-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">Image details</h2>
+                <h2 className="text-lg font-semibold">img details</h2>
                 <p className="text-xs text-neutral-500">{active.baseName}</p>
                 {activeIndex >= 0 ? (
                   <p className="text-xs text-neutral-500">
@@ -608,7 +626,7 @@ export default function GalleryClient({
                   disabled={!hasPrevious}
                   className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
                 >
-                  Prev
+                  <LightCaretLeft className="h-4 w-4" fill="currentColor" />
                 </button>
                 <button
                   type="button"
@@ -616,14 +634,31 @@ export default function GalleryClient({
                   disabled={!hasNext}
                   className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
                 >
-                  Next
+                  <LightCaretRight className="h-4 w-4" fill="currentColor" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const downloadUrl = `/image/${active.id}/${active.baseName}.${active.ext}`;
+                    const link = document.createElement("a");
+                    link.href = downloadUrl;
+                    link.download = `${active.baseName}.${active.ext}`;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs"
+                  aria-label="Download image"
+                  title="Download image"
+                >
+                  <LightDownload className="h-4 w-4" fill="currentColor" />
                 </button>
                 <button
                   type="button"
                   onClick={closeModal}
                   className="rounded border border-neutral-200 px-2 py-1 text-xs"
                 >
-                  Close
+                  <LightTimes className="h-4 w-4" fill="currentColor" />
                 </button>
               </div>
             </div>
@@ -643,7 +678,7 @@ export default function GalleryClient({
 
                 <div className="flex items-center justify-between rounded border border-neutral-200 px-3 py-2 text-xs">
                   <span className="text-neutral-600">
-                    Share links: {share ? "enabled" : "disabled"}
+                    sharing: {share ? "enabled" : "disabled"}
                   </span>
                   <button
                     type="button"
@@ -654,7 +689,7 @@ export default function GalleryClient({
                       share ? "bg-black text-white" : "border border-neutral-200"
                     }`}
                   >
-                    {share ? "Disable" : "Enable"}
+                    {share ? "disable" : "enable"}
                   </button>
                 </div>
 

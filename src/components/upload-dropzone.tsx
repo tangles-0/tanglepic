@@ -42,10 +42,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
   const inputId = useId();
 
   const statusText = useMemo(() => {
-    if (status === "uploading") return "Uploading...";
-    if (status === "success") return "Upload complete.";
-    if (status === "error") return message ?? "Upload failed.";
-    return "Drag & drop images here, or click to browse.";
+    if (status === "uploading") return "uploading...";
+    if (status === "success") return "upload complete.";
+    if (status === "error") return message ?? "oh shi-";
+    return "drag N drop imgs here, or click 2 browse";
   }, [message, status]);
 
   function pushMessage(text: string, tone: UploadMessage["tone"]) {
@@ -256,7 +256,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
       delete next[image.id];
       return next;
     });
-    pushMessage("Image deleted.", "success");
+    pushMessage("img deleted.", "success");
   }
 
   function onDragOver(event: React.DragEvent<HTMLDivElement>) {
@@ -275,10 +275,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
 
   return (
     <section className="space-y-3 rounded-md border border-neutral-200 p-4">
-      <h2 className="text-lg font-medium">Upload images</h2>
+      <h2 className="text-lg font-medium">upload imgs</h2>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="block text-xs text-neutral-500" htmlFor={inputId}>
-          Album (optional)
+          album (optional)
         </label>
         <button
           type="button"
@@ -288,7 +288,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
           }}
           className="rounded border border-neutral-200 px-3 py-1 text-xs"
         >
-          Create album
+          + album
         </button>
       </div>
       <select
@@ -298,7 +298,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
         onChange={(event) => setAlbumId(event.target.value)}
         className="w-full rounded border px-3 py-2"
       >
-        <option value="">No album</option>
+        <option value="">no album</option>
         {albums.map((album) => (
           <option key={album.id} value={album.id}>
             {album.name}
@@ -329,7 +329,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
       >
         <p className="font-medium">{statusText}</p>
         <p className="mt-2 text-xs text-neutral-500">
-          Images are stored by upload time, metadata removed, and thumbnails generated.
+          imgs are stored by upload time with metadata removed.
         </p>
       </div>
 
@@ -370,7 +370,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
 
       {recentUploads.length > 0 ? (
         <div className="space-y-2">
-          <h3 className="text-xs font-medium text-neutral-600">Recent uploads</h3>
+          <h3 className="text-xs font-medium text-neutral-600">ur recent uploads</h3>
           <div className="space-y-2">
             {recentUploads.map((image) => {
               const thumbUrl = `/image/${image.id}/${image.baseName}-sm.${image.ext}`;
@@ -420,13 +420,13 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
       {isAlbumModalOpen ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
           <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
-            <h3 className="text-lg font-semibold">Create album</h3>
+            <h3 className="text-lg font-semibold">create album</h3>
             <p className="mt-1 text-xs text-neutral-500">
-              Give the album a short name so you can find it later.
+              give the album a nice name so u can find it later. like Sir Pooty Pants
             </p>
             <input
               className="mt-4 w-full rounded border px-3 py-2"
-              placeholder="Album name"
+              placeholder="album name"
               value={newAlbumName}
               onChange={(event) => setNewAlbumName(event.target.value)}
             />
@@ -439,14 +439,14 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
                 onClick={() => setIsAlbumModalOpen(false)}
                 className="rounded border border-neutral-200 px-3 py-1 text-xs"
               >
-                Cancel
+                cancel
               </button>
               <button
                 type="button"
                 onClick={handleCreateAlbum}
                 className="rounded bg-black px-3 py-1 text-xs text-white"
               >
-                Save
+                saveth the album
               </button>
             </div>
           </div>

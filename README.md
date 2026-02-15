@@ -37,8 +37,8 @@ _Also for videos and other files (later)_
 - [x] give album view the same controls / layout as gallery view
 - [x] next / prev buttons when viewing image in modal on a gallery / album
 - [x] support .gifs
-- [ ] add github link
-- [ ] add download button
+- [x] add github link
+- [x] add download button
 - [ ] ability to rotate images
 - [ ] ability to edit album display order - drag n drop 'up' / 'down' btns
 - [ ] ability to rename albums (just click on the title and start typing)
@@ -47,7 +47,7 @@ _Also for videos and other files (later)_
 
 ### TODO LATERER:
 
-- [ ] add [landon's ditherspace](https://landonjsmith.com/projects/ditherspace.html)
+- [ ] see if landon will let me add [his ditherspace](https://landonjsmith.com/projects/ditherspace.html) to this app
 - [ ] keyboard shortcuts
 - [ ] TUI
 - [ ] support video formats

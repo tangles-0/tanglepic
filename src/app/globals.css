@@ -199,7 +199,7 @@ html {
   --theme-text: #ff0000;
   --theme-text-muted: #e00000;
   --theme-text-soft: #db0000;
-  --theme-border: #3a0000;
+  --theme-border: #7e0000;
   --theme-border-strong: #6b0000;
   --theme-link: #ff2a2a;
   --theme-input-bg: #0b0000;
@@ -628,6 +628,9 @@ body {
 [data-theme] a {
   color: var(--theme-link);
 }
+[data-theme="crt"] a {
+  color: #ff9bdd;
+}
 
 [data-theme] input,
 [data-theme] select,
@@ -717,6 +720,26 @@ body {
 [data-theme] .bg-emerald-50 {
   background-color: var(--theme-alert-success-bg);
 }
+
+[data-theme="depth"] .bg-emerald-600 {
+  background-color: var(--theme-alert-success);
+}
+[data-theme="author"] .bg-emerald-600 {
+  color: var(--theme-panel);
+}
+[data-theme="retro"] .bg-emerald-600 {
+  background-color: var(--theme-text);
+  color: var(--theme-panel);
+}
+[data-theme="cyber"] .bg-emerald-600 {
+  background-color: var(--theme-alert-success);
+  color: var(--theme-panel);
+}
+[data-theme="blood"] .bg-emerald-600 {
+  background-color: var(--theme-text);
+  color: var(--theme-panel);
+}
+
 
 [data-theme] .text-emerald-700 {
   color: var(--theme-alert-success);
