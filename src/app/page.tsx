@@ -30,7 +30,11 @@ export default async function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-10 text-sm">
       <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">TanglePic</h1>
+        {/* <div className="flex items-center gap-2">
+          <img src="/latex-logo.png" alt="TanglePic"  width="24px" />
+        
+        </div> */}
+        <h1 className="text-2xl font-semibold">LaTeX</h1>
         <p className="text-neutral-600">
           Create an account to upload images, organize albums, and generate direct share
           links.

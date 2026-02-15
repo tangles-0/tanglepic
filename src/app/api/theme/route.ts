@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth";
 import { getUserTheme, setUserTheme } from "@/lib/metadata-store";
+import { THEME_SET } from "@/components/theme/themes";
 
 export const runtime = "nodejs";
-
-const ALLOWED_THEMES = new Set(["default", "author", "dark", "neon-green", "retro", "cyber", "blood"]);
 
 export async function GET(): Promise<NextResponse> {
   const userId = await getSessionUserId();
@@ -24,7 +23,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const payload = (await request.json()) as { theme?: string };
   const theme = payload.theme?.trim();
-  if (!theme || !ALLOWED_THEMES.has(theme)) {
+  if (!theme || !THEME_SET.has(theme)) {
     return NextResponse.json({ error: "Invalid theme." }, { status: 400 });
   }
 

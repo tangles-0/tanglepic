@@ -33,7 +33,7 @@ function contentTypeForExt(ext: string): string {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> },
 ): Promise<Response> {
   const { fileName } = await params;
@@ -42,11 +42,19 @@ export async function GET(
     if (!parsed && /^[A-Za-z0-9]+$/.test(fileName)) {
       const albumShare = await getAlbumShareByCode(fileName);
       if (albumShare) {
-        return new Response(null, {
-          status: 307,
-          headers: {
-            Location: `/share/album/${albumShare.id}`,
-          },
+        // Forward internally so the short share URL remains in the browser.
+        const upstream = await fetch(new URL(`/share/album/${albumShare.id}`, request.url), {
+          headers: request.headers,
+          cache: "no-store",
+        });
+        const headers = new Headers(upstream.headers);
+        headers.delete("content-encoding");
+        headers.delete("content-length");
+        headers.delete("transfer-encoding");
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers,
         });
       }
       return new Response("Not found", { status: 404 });

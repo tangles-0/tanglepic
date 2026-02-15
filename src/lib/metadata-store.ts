@@ -1038,7 +1038,7 @@ export type AppSettings = {
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
-  motd: "Welcome to TanglePic.",
+  motd: "Welcome to LaTeX.",
   costThisMonth: 0,
   fundedThisMonth: 0,
   donateUrl: undefined,

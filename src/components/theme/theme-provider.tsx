@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { THEME_SET } from "@/components/theme/themes";
 
 const THEME_STORAGE_KEY = "tanglepic-theme";
-const ALLOWED_THEMES = new Set(["default", "author", "dark", "neon-green", "retro", "cyber", "blood"]);
 
 type ThemeContextValue = {
   theme: string;
@@ -35,7 +35,7 @@ export function ThemeProvider({
     if (preferLocalStorage) {
       try {
         const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-        if (stored && ALLOWED_THEMES.has(stored)) {
+        if (stored && THEME_SET.has(stored)) {
           next = stored;
           setThemeState(stored);
         }
@@ -65,7 +65,7 @@ export function ThemeProvider({
 
   async function setTheme(next: string) {
     if (next === theme) return;
-    if (!ALLOWED_THEMES.has(next)) return;
+    if (!THEME_SET.has(next)) return;
     const previous = theme;
     setThemeState(next);
     // If we're in "local storage preferred" mode (logged out), don't attempt DB sync.

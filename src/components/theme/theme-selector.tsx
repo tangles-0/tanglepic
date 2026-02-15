@@ -1,8 +1,7 @@
 "use client";
 
-import { useTheme } from "@/components/theme-provider";
-
-const THEMES = ["default", "author", "dark", "neon-green", "retro", "cyber", "blood"] as const;
+import { useTheme } from "@/components/theme/theme-provider";
+import { THEMES } from "@/components/theme/themes";
 
 export default function ThemeSelector() {
   const { theme, setTheme, isSaving } = useTheme();
