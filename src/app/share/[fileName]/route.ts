@@ -1,5 +1,4 @@
 import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
 import { getImageBuffer } from "@/lib/storage";
 import { getAlbumShareByCode, getImage, getShareByCode } from "@/lib/metadata-store";
 import { unavailableImageResponse } from "@/lib/unavailable-image";
@@ -33,6 +32,14 @@ function contentTypeForExt(ext: string): string {
   }
 }
 
+function getInternalAppOrigin(): string {
+  const configured = process.env.INTERNAL_APP_ORIGIN?.trim();
+  if (configured) {
+    return configured;
+  }
+  return `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> },
@@ -43,8 +50,22 @@ export async function GET(
     if (!parsed && /^[A-Za-z0-9]+$/.test(fileName)) {
       const albumShare = await getAlbumShareByCode(fileName);
       if (albumShare) {
-        // Rewrite internally to avoid external host lookups through the proxy.
-        return NextResponse.rewrite(new URL(`/share/album/${albumShare.id}`, request.url));
+        // Proxy internally so `/share/<code>` stays in the browser URL.
+        const upstream = await fetch(new URL(`/share/internal-album/${albumShare.id}`, getInternalAppOrigin()), {
+          headers: {
+            accept: request.headers.get("accept") ?? "text/html,*/*",
+          },
+          cache: "no-store",
+        });
+        const headers = new Headers(upstream.headers);
+        headers.delete("content-encoding");
+        headers.delete("content-length");
+        headers.delete("transfer-encoding");
+        return new Response(upstream.body, {
+          status: upstream.status,
+          statusText: upstream.statusText,
+          headers,
+        });
       }
       return new Response("Not found", { status: 404 });
     }
