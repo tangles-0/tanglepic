@@ -42,7 +42,12 @@ export async function GET(
     if (!parsed && /^[A-Za-z0-9]+$/.test(fileName)) {
       const albumShare = await getAlbumShareByCode(fileName);
       if (albumShare) {
-        return Response.redirect(new URL(`/share/album/${albumShare.id}`, _request.url), 307);
+        return new Response(null, {
+          status: 307,
+          headers: {
+            Location: `/share/album/${albumShare.id}`,
+          },
+        });
       }
       return new Response("Not found", { status: 404 });
     }
