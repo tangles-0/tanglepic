@@ -3,6 +3,11 @@
 import { useTheme } from "@/components/theme/theme-provider";
 import { THEMES } from "@/components/theme/themes";
 
+function formatThemeLabel(option: string): string {
+  if (option === "crt") return "CRT";
+  return option;
+}
+
 export default function ThemeSelector() {
   const { theme, setTheme, isSaving } = useTheme();
 
@@ -17,7 +22,7 @@ export default function ThemeSelector() {
       >
         {THEMES.map((option) => (
           <option key={option} value={option}>
-            {option}
+            {formatThemeLabel(option)}
           </option>
         ))}
       </select>

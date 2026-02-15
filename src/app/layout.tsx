@@ -38,13 +38,13 @@ export default async function RootLayout({
         </head>
       ) : null}
       <body className="min-h-screen bg-white text-neutral-900">
-        <div className="fixed bottom-0 right-0 z-40 pointer-events-none">
-          <img src="/latex-logo.png" alt="LaTeX logo" width="48" className="latex-logo" />
-        </div>
-        <ThemeProvider initialTheme={theme} preferLocalStorage={!userId}>
-          <FloatingThemeSelector />
-          {children}
-        </ThemeProvider>
+          <div className="fixed bottom-0 right-0 z-40 pointer-events-none">
+            <img src="/latex-logo.png" alt="LaTeX logo" width="48" className="latex-logo" />
+          </div>
+          <ThemeProvider initialTheme={theme} preferLocalStorage={!userId}>
+            <FloatingThemeSelector />
+            {children}
+          </ThemeProvider>
       </body>
     </html>
   );

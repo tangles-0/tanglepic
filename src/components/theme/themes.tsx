@@ -20,7 +20,7 @@ import { LightGhost } from '@energiz3r/icon-library/Icons/Light/LightGhost';
 import { LightBiohazard } from '@energiz3r/icon-library/Icons/Light/LightBiohazard';
 import { LightSkull } from '@energiz3r/icon-library/Icons/Light/LightSkull';
 
-export const THEMES = ["dark", "light", "author", "depth", "neon-green", "retro", "cyber", "blood", "robot"] as const;
+export const THEMES = ["dark", "light", "author", "depth", "neon-green", "retro", "cyber", "blood", "robot", "crt"] as const;
 export const THEME_SET = new Set<string>(THEMES);
 
 export const ThemeIcon = ({ theme }: { theme: string }) => {
@@ -67,6 +67,10 @@ export const ThemeIcon = ({ theme }: { theme: string }) => {
     case "robot":
       return (
         <LightRobot width={size} height={size} fill={iconColor} />
+      );
+    case "crt":
+      return (
+        <LightPager width={size} height={size} fill={iconColor} />
       );
     default:
       return null;

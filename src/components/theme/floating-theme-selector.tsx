@@ -4,6 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import { useTheme } from "@/components/theme/theme-provider";
 import { ThemeIcon, THEMES } from "@/components/theme/themes";
 
+function formatThemeLabel(option: string): string {
+  if (option === "crt") return "CRT";
+  return option.replace("-", " ");
+}
+
 export default function FloatingThemeSelector() {
   const { theme, setTheme, isSaving } = useTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -50,7 +55,7 @@ export default function FloatingThemeSelector() {
                   } ${isSaving ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 <ThemeIcon theme={option} />
-                <span className="capitalize">{option.replace("-", " ")}</span>
+                <span className="capitalize">{formatThemeLabel(option)}</span>
               </button>
             ))}
           </div>
