@@ -6,7 +6,11 @@ import GalleryTabs from "@/components/gallery-tabs";
 import PageHeader from "@/components/ui/page-header";
 import TextLink from "@/components/ui/text-link";
 
-export default async function GalleryPage() {
+export default async function GalleryPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ tab?: string }>;
+}) {
   const session = await getServerSession(authOptions);
   const userId = (session?.user as { id?: string } | undefined)?.id;
   if (!userId) {
@@ -18,12 +22,14 @@ export default async function GalleryPage() {
     listImagesForUser(userId),
     isAdminUser(userId),
   ]);
-
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "images";
+  const pageTitle = initialTab === "albums" ? "Your albums" : "Your gallery";
 
   return (
     <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
       <PageHeader
-        title="Your gallery"
+        title={pageTitle}
         subtitle={`${images.length} image${images.length === 1 ? "" : "s"} uploaded.`}
         backLink={{ href: "/", label: "Back to home" }}
         actions={
@@ -44,6 +50,7 @@ export default async function GalleryPage() {
       />
 
       <GalleryTabs
+        initialTab={initialTab}
         albums={albums.map((album) => ({ id: album.id, name: album.name }))}
         images={images}
       />

@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { uploadSingleImage } from "@/lib/upload-client";
 import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
+const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
+
 type GalleryImage = {
   id: string;
   baseName: string;
@@ -33,9 +35,15 @@ type UploadMessage = {
 export default function GalleryClient({
   images,
   onImagesChange,
+  showAlbumImageToggle = true,
+  uploadAlbumId,
+  hideImagesInAlbums = false,
 }: {
   images: GalleryImage[];
   onImagesChange?: (next: GalleryImage[]) => void;
+  showAlbumImageToggle?: boolean;
+  uploadAlbumId?: string;
+  hideImagesInAlbums?: boolean;
 }) {
   const [items, setItems] = useState<GalleryImage[]>(images);
   const [active, setActive] = useState<GalleryImage | null>(null);
@@ -51,6 +59,7 @@ export default function GalleryClient({
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [globalDragging, setGlobalDragging] = useState(false);
   const [messages, setMessages] = useState<UploadMessage[]>([]);
+  const [showAlbumImages, setShowAlbumImages] = useState(true);
   const dragCounter = useRef(0);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -58,6 +67,34 @@ export default function GalleryClient({
   useEffect(() => {
     setItems(images);
   }, [images]);
+
+  useEffect(() => {
+    if (!showAlbumImageToggle) {
+      return;
+    }
+    try {
+      const stored = window.localStorage.getItem(SHOW_ALBUM_IMAGES_STORAGE_KEY);
+      if (stored === "0") {
+        setShowAlbumImages(false);
+      }
+      if (stored === "1") {
+        setShowAlbumImages(true);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, [showAlbumImageToggle]);
+
+  useEffect(() => {
+    if (!showAlbumImageToggle) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(SHOW_ALBUM_IMAGES_STORAGE_KEY, showAlbumImages ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [showAlbumImages, showAlbumImageToggle]);
 
   useEffect(() => {
     function handleDragEnter(event: DragEvent) {
@@ -100,17 +137,34 @@ export default function GalleryClient({
     };
   }, []);
 
+  const filteredItems = useMemo(
+    () => {
+      if (hideImagesInAlbums) {
+        return items.filter((image) => !image.albumId);
+      }
+      if (showAlbumImageToggle && !showAlbumImages) {
+        return items.filter((image) => !image.albumId);
+      }
+      return items;
+    },
+    [hideImagesInAlbums, items, showAlbumImageToggle, showAlbumImages],
+  );
+
   const displayItems = useMemo(
     () =>
-      items.map((image) => ({
+      filteredItems.map((image) => ({
         ...image,
         thumbUrl: `/image/${image.id}/${image.baseName}-sm.${image.ext}`,
         fullUrl: `/image/${image.id}/${image.baseName}.${image.ext}`,
       })),
-    [items],
+    [filteredItems],
   );
 
-  const selectedIds = useMemo(() => Array.from(selected), [selected]);
+  const visibleIds = useMemo(() => new Set(filteredItems.map((image) => image.id)), [filteredItems]);
+  const selectedIds = useMemo(
+    () => Array.from(selected).filter((id) => visibleIds.has(id)),
+    [selected, visibleIds],
+  );
 
   async function uploadFiles(files: FileList | File[]) {
     const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
@@ -128,7 +182,7 @@ export default function GalleryClient({
     }
 
     for (const file of itemsToUpload) {
-      const result = await uploadSingleImage(file);
+      const result = await uploadSingleImage(file, uploadAlbumId);
       const entry: UploadMessage = {
         id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
         text: result.message,
@@ -398,9 +452,23 @@ export default function GalleryClient({
         </div>
       ) : null}
 
-      {items.length === 0 ? (
+      {showAlbumImageToggle ? (
+        <div className="flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => setShowAlbumImages((current) => !current)}
+            className="rounded border border-neutral-200 px-3 py-1 text-xs"
+          >
+            {showAlbumImages ? "Hide images in albums" : "Show images in albums"}
+          </button>
+        </div>
+      ) : null}
+
+      {displayItems.length === 0 ? (
         <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
-          No uploads yet. Drop images anywhere on this page or head to the upload page.
+          {items.length === 0
+            ? "No uploads yet. Drop images anywhere on this page or head to the upload page."
+            : "No images to show with the current filter."}
         </div>
       ) : (
         <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,320px))]">

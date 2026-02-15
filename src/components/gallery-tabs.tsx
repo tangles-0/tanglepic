@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import GalleryClient from "@/components/gallery-client";
+
+const HIDE_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-hide-album-images";
 
 type AlbumInfo = {
   id: string;
@@ -23,18 +26,46 @@ type GalleryImage = {
 export default function GalleryTabs({
   albums,
   images,
+  initialTab = "images",
 }: {
   albums: AlbumInfo[];
   images: GalleryImage[];
+  initialTab?: "albums" | "images";
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [imageItems, setImageItems] = useState<GalleryImage[]>(images);
-  const [activeTab, setActiveTab] = useState<"albums" | "images">("images");
+  const [activeTab, setActiveTab] = useState<"albums" | "images">(initialTab);
   const [albumItems, setAlbumItems] = useState(albums);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [albumToDelete, setAlbumToDelete] = useState<AlbumInfo | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [hideAlbumImages, setHideAlbumImages] = useState(false);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(HIDE_ALBUM_IMAGES_STORAGE_KEY);
+      if (stored === "1") {
+        setHideAlbumImages(true);
+      }
+      if (stored === "0") {
+        setHideAlbumImages(false);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(HIDE_ALBUM_IMAGES_STORAGE_KEY, hideAlbumImages ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [hideAlbumImages]);
 
   const albumPreviews = albumItems.map((album) => {
     const previews = imageItems
@@ -43,6 +74,18 @@ export default function GalleryTabs({
       .map((image) => ({ id: image.id, baseName: image.baseName, ext: image.ext }));
     return { ...album, previews };
   });
+
+  function setTab(next: "albums" | "images") {
+    setActiveTab(next);
+    const params = new URLSearchParams(searchParams.toString());
+    if (next === "albums") {
+      params.set("tab", "albums");
+    } else {
+      params.delete("tab");
+    }
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }
 
   async function createAlbum() {
     const name = newAlbumName.trim();
@@ -92,7 +135,7 @@ export default function GalleryTabs({
       <div className="flex items-center gap-2 text-xs">
         <button
           type="button"
-          onClick={() => setActiveTab("albums")}
+          onClick={() => setTab("albums")}
           className={`rounded px-3 py-1 ${
             activeTab === "albums" ? "bg-black text-white" : "border border-neutral-200"
           }`}
@@ -101,31 +144,38 @@ export default function GalleryTabs({
         </button>
         <button
           type="button"
-          onClick={() => setActiveTab("images")}
+          onClick={() => setTab("images")}
           className={`rounded px-3 py-1 ${
             activeTab === "images" ? "bg-black text-white" : "border border-neutral-200"
           }`}
         >
           Images
         </button>
+        {activeTab === "images" ? (
+          <button
+            type="button"
+            onClick={() => setHideAlbumImages((current) => !current)}
+            className="rounded border border-neutral-200 px-3 py-1"
+          >
+            {hideAlbumImages ? "Show images in albums" : "Hide images in albums"}
+          </button>
+        ) : null}
+        {activeTab === "albums" ? (
+          <button
+            type="button"
+            onClick={() => {
+              setCreateError(null);
+              setIsCreateOpen(true);
+            }}
+            className="rounded border border-neutral-200 px-3 py-1"
+          >
+            Create album
+          </button>
+        ) : null}
       </div>
 
       {activeTab === "albums" ? (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-sm font-medium">Albums</h2>
-            <button
-              type="button"
-              onClick={() => {
-                setCreateError(null);
-                setIsCreateOpen(true);
-              }}
-              className="rounded border border-neutral-200 px-3 py-1 text-xs"
-            >
-              Create album
-            </button>
-          </div>
-
           {albumPreviews.length === 0 ? (
             <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
               No albums yet. Create one to get started.
@@ -249,7 +299,12 @@ export default function GalleryTabs({
           ) : null}
         </div>
       ) : (
-        <GalleryClient images={imageItems} onImagesChange={setImageItems} />
+        <GalleryClient
+          images={imageItems}
+          onImagesChange={setImageItems}
+          showAlbumImageToggle={false}
+          hideImagesInAlbums={hideAlbumImages}
+        />
       )}
     </div>
   );

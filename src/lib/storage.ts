@@ -82,6 +82,7 @@ export async function storeImageAndThumbnails(
 
   const baseName = buildBaseName(uploadedAt);
   const outputFormat = await resolveOutputFormat(buffer);
+  const sourceOptions = outputFormat.format === "gif" ? { animated: true } : undefined;
   const originalPath = getImagePath(baseName, outputFormat.ext, "original", uploadedAt);
   const smPath = getImagePath(baseName, outputFormat.ext, "sm", uploadedAt);
   const lgPath = getImagePath(baseName, outputFormat.ext, "lg", uploadedAt);
@@ -90,19 +91,19 @@ export async function storeImageAndThumbnails(
   await fs.mkdir(path.dirname(smPath), { recursive: true });
   await fs.mkdir(path.dirname(lgPath), { recursive: true });
 
-  const image = sharp(buffer).rotate();
+  const image = sharp(buffer, sourceOptions).rotate();
   const metadata = await image.metadata();
   const width = metadata.width ?? 0;
   const height = metadata.height ?? 0;
 
   const originalBuffer = await encodeOutput(image.clone(), outputFormat, 85);
   const smBuffer = await encodeOutput(
-    sharp(buffer).rotate().resize({ width: THUMBNAIL_SIZES.sm, withoutEnlargement: true }),
+    sharp(buffer, sourceOptions).rotate().resize({ width: THUMBNAIL_SIZES.sm, withoutEnlargement: true }),
     outputFormat,
     80,
   );
   const lgBuffer = await encodeOutput(
-    sharp(buffer).rotate().resize({ width: THUMBNAIL_SIZES.lg, withoutEnlargement: true }),
+    sharp(buffer, sourceOptions).rotate().resize({ width: THUMBNAIL_SIZES.lg, withoutEnlargement: true }),
     outputFormat,
     82,
   );
@@ -156,7 +157,7 @@ export async function deleteImageFiles(
 
 type OutputFormat = {
   ext: string;
-  format: "jpeg" | "png" | "webp";
+  format: "jpeg" | "png" | "webp" | "gif";
 };
 
 async function resolveOutputFormat(buffer: Buffer): Promise<OutputFormat> {
@@ -164,11 +165,15 @@ async function resolveOutputFormat(buffer: Buffer): Promise<OutputFormat> {
   const hasAlpha = Boolean(metadata.hasAlpha);
   const format = metadata.format;
 
+  if (format === "gif") {
+    return { ext: "gif", format: "gif" };
+  }
+
   if (format === "webp") {
     return { ext: "webp", format: "webp" };
   }
 
-  if (format === "png" || format === "gif" || hasAlpha) {
+  if (format === "png" || hasAlpha) {
     return { ext: "png", format: "png" };
   }
 
@@ -185,6 +190,9 @@ async function encodeOutput(
   }
   if (output.format === "webp") {
     return image.webp({ quality }).toBuffer();
+  }
+  if (output.format === "gif") {
+    return image.gif({ effort: 7 }).toBuffer();
   }
   return image.jpeg({ quality }).toBuffer();
 }

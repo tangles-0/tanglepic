@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { getAlbumForUser, listImagesForAlbum } from "@/lib/metadata-store";
-import AlbumView from "@/components/album-view";
+import GalleryClient from "@/components/gallery-client";
+import AlbumShareControls from "@/components/album-share-controls";
+import PageHeader from "@/components/ui/page-header";
 
 export default async function AlbumPage({
   params,
@@ -25,25 +26,26 @@ export default async function AlbumPage({
   const images = await listImagesForAlbum(userId, albumId);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-4xl flex-col gap-6 px-6 py-10 text-sm">
-      <header className="space-y-3">
-        <Link href="/gallery" className="text-sm text-neutral-500 underline">
-          Back to gallery
-        </Link>
-        <div>
-          <h1 className="text-2xl font-semibold">{album.name}</h1>
+    <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
+      <PageHeader
+        title={album.name}
+        subtitle={`${images.length} image${images.length === 1 ? "" : "s"} in this album.`}
+        backLink={{ href: "/gallery?tab=albums", label: "Return to albums" }}
+      >
+        {images.length === 0 ? (
           <p className="text-xs text-neutral-500">
-            {images.length} image{images.length === 1 ? "" : "s"}
+            Go to the Images tab, select images, then choose “Add to album”.
           </p>
-          {images.length === 0 ? (
-            <p className="mt-2 text-xs text-neutral-500">
-              Go to the Images tab, select images, then choose “Add to album”.
-            </p>
-          ) : null}
-        </div>
-      </header>
+        ) : null}
+      </PageHeader>
 
-      <AlbumView albumId={albumId} images={images} />
+      <AlbumShareControls albumId={albumId} />
+
+      <GalleryClient
+        images={images}
+        showAlbumImageToggle={false}
+        uploadAlbumId={albumId}
+      />
     </main>
   );
 }
