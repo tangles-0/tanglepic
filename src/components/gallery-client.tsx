@@ -55,6 +55,7 @@ export default function GalleryClient({
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [isGenerating640, setIsGenerating640] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [albums, setAlbums] = useState<{ id: string; name: string }[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -276,7 +277,11 @@ export default function GalleryClient({
     window.setTimeout(() => setCopied((current) => (current === label ? null : current)), 1200);
   }
 
-  async function enableShare(image: GalleryImage) {
+  function to640VariantUrl(url: string): string {
+    return url.replace(/\.([a-zA-Z0-9]+)$/, "-640.$1");
+  }
+
+  async function enableShare(image: GalleryImage): Promise<ShareInfo | null> {
     setShareError(null);
     const response = await fetch("/api/shares", {
       method: "POST",
@@ -287,16 +292,18 @@ export default function GalleryClient({
     if (!response.ok) {
       const payload = (await response.json()) as { error?: string };
       setShareError(payload.error ?? "Unable to create share link.");
-      return;
+      return null;
     }
 
     const payload = (await response.json()) as { share: { id: string }; urls: ShareInfo["urls"] };
-    setShare({ id: payload.share.id, urls: payload.urls });
+    const nextShare = { id: payload.share.id, urls: payload.urls };
+    setShare(nextShare);
     setItems((current) =>
       current.map((item) =>
         item.id === image.id ? { ...item, shared: true } : item,
       ),
     );
+    return nextShare;
   }
 
   async function disableShare(image: GalleryImage) {
@@ -319,6 +326,29 @@ export default function GalleryClient({
         item.id === image.id ? { ...item, shared: false } : item,
       ),
     );
+  }
+
+  async function generate640Link(image: GalleryImage) {
+    setShareError(null);
+    setIsGenerating640(true);
+    try {
+      const currentShare = share ?? (await enableShare(image));
+      if (!currentShare) {
+        return;
+      }
+
+      const variantUrl = to640VariantUrl(currentShare.urls.original);
+      const response = await fetch(variantUrl, { cache: "no-store" });
+      if (!response.ok) {
+        throw new Error("Unable to generate 640x480 image.");
+      }
+
+      await copyText(`${origin}${variantUrl}`, "640");
+    } catch (error) {
+      setShareError(error instanceof Error ? error.message : "Unable to generate 640x480 link.");
+    } finally {
+      setIsGenerating640(false);
+    }
   }
 
   async function fetchAlbums() {
@@ -680,18 +710,29 @@ export default function GalleryClient({
                   <span className="text-neutral-600">
                     sharing: {share ? "enabled" : "disabled"}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      share ? disableShare(active) : enableShare(active)
-                    }
-                    className={`rounded px-3 py-1 text-xs ${
-                      share ? "bg-black text-white" : "border border-neutral-200"
-                    }`}
-                  >
-                    {share ? "disable" : "enable"}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void (share ? disableShare(active) : enableShare(active))
+                      }
+                      className={`rounded px-3 py-1 text-xs ${
+                        share ? "bg-black text-white" : "border border-neutral-200"
+                      }`}
+                    >
+                      {share ? "disable" : "enable"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void generate640Link(active)}
+                      disabled={isGenerating640}
+                      className="rounded border border-neutral-200 px-3 py-1 text-xs disabled:opacity-50"
+                    >
+                      generate 640x480 link
+                    </button>
+                  </div>
                 </div>
+                {copied === "640" ? <p className="text-[11px] text-emerald-600">Copied 640 link</p> : null}
 
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
 

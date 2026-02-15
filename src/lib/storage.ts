@@ -10,6 +10,12 @@ const THUMBNAIL_SIZES = {
   sm: 320,
   lg: 1024,
 } as const;
+const MAX_640_SIZE = {
+  width: 640,
+  height: 480,
+} as const;
+
+export type ImageSize = "original" | "sm" | "lg" | "x640";
 
 type StorageBackend = "local" | "s3";
 
@@ -57,7 +63,7 @@ function datePathParts(uploadedAt: Date): { year: string; month: string; day: st
 function buildStorageKey(
   baseName: string,
   ext: string,
-  size: "original" | "sm" | "lg",
+  size: ImageSize,
   uploadedAt: Date,
 ): string {
   const { year, month, day } = datePathParts(uploadedAt);
@@ -67,7 +73,7 @@ function buildStorageKey(
 export function getImagePath(
   baseName: string,
   ext: string,
-  size: "original" | "sm" | "lg",
+  size: ImageSize,
   uploadedAt: Date,
 ): string {
   const key = buildStorageKey(baseName, ext, size, uploadedAt);
@@ -137,7 +143,7 @@ export async function deleteImageFiles(
   ext: string,
   uploadedAt: Date,
 ): Promise<void> {
-  const sizes: Array<"original" | "sm" | "lg"> = ["original", "sm", "lg"];
+  const sizes: ImageSize[] = ["original", "sm", "lg", "x640"];
   if (STORAGE_BACKEND === "s3") {
     await Promise.all(
       sizes.map(async (size) => {
@@ -227,7 +233,28 @@ async function deleteFromS3(key: string): Promise<void> {
 export async function getImageBuffer(
   baseName: string,
   ext: string,
-  size: "original" | "sm" | "lg",
+  size: ImageSize,
+  uploadedAt: Date,
+): Promise<Buffer> {
+  try {
+    return await readStoredBuffer(baseName, ext, size, uploadedAt);
+  } catch (error) {
+    if (size !== "x640") {
+      throw error;
+    }
+  }
+
+  // Lazily generate the 640x480 derivative on first request.
+  const original = await readStoredBuffer(baseName, ext, "original", uploadedAt);
+  const generated640 = await generate640Buffer(original, ext);
+  await writeStoredBuffer(baseName, ext, "x640", uploadedAt, generated640);
+  return generated640;
+}
+
+async function readStoredBuffer(
+  baseName: string,
+  ext: string,
+  size: ImageSize,
   uploadedAt: Date,
 ): Promise<Buffer> {
   const key = buildStorageKey(baseName, ext, size, uploadedAt);
@@ -249,6 +276,46 @@ export async function getImageBuffer(
     return Buffer.concat(chunks);
   }
   return fs.readFile(getImagePath(baseName, ext, size, uploadedAt));
+}
+
+async function writeStoredBuffer(
+  baseName: string,
+  ext: string,
+  size: ImageSize,
+  uploadedAt: Date,
+  data: Buffer,
+): Promise<void> {
+  const filePath = getImagePath(baseName, ext, size, uploadedAt);
+  if (STORAGE_BACKEND === "s3") {
+    await writeToS3(filePath, ext, data);
+    return;
+  }
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, data);
+}
+
+function outputFormatFromExt(ext: string): OutputFormat {
+  if (ext === "png") {
+    return { ext: "png", format: "png" };
+  }
+  if (ext === "webp") {
+    return { ext: "webp", format: "webp" };
+  }
+  if (ext === "gif") {
+    return { ext: "gif", format: "gif" };
+  }
+  return { ext: "jpg", format: "jpeg" };
+}
+
+async function generate640Buffer(original: Buffer, ext: string): Promise<Buffer> {
+  const sourceOptions = ext === "gif" ? { animated: true } : undefined;
+  const resized = sharp(original, sourceOptions).resize({
+    width: MAX_640_SIZE.width,
+    height: MAX_640_SIZE.height,
+    fit: "inside",
+    withoutEnlargement: true,
+  });
+  return encodeOutput(resized, outputFormatFromExt(ext), 82);
 }
 
 function contentTypeForExt(ext: string): string {
