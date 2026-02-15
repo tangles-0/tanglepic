@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { getImageBuffer } from "@/lib/storage";
-import { getImage, getShareByCode } from "@/lib/metadata-store";
+import { getAlbumShareByCode, getImage, getShareByCode } from "@/lib/metadata-store";
+import { unavailableImageResponse } from "@/lib/unavailable-image";
 
 export const runtime = "nodejs";
 
@@ -37,21 +38,28 @@ export async function GET(
 ): Promise<Response> {
   const { fileName } = await params;
   const parsed = parseFileName(fileName);
-  if (!parsed) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  const share = await getShareByCode(parsed.code);
-  if (!share) {
-    return new Response("Not found", { status: 404 });
-  }
-
-  const image = await getImage(share.imageId);
-  if (!image || image.ext !== parsed.ext) {
-    return new Response("Not found", { status: 404 });
-  }
-
   try {
+    if (!parsed && /^[A-Za-z0-9]+$/.test(fileName)) {
+      const albumShare = await getAlbumShareByCode(fileName);
+      if (albumShare) {
+        return Response.redirect(new URL(`/share/album/${albumShare.id}`, _request.url), 307);
+      }
+      return new Response("Not found", { status: 404 });
+    }
+    if (!parsed) {
+      return unavailableImageResponse("png");
+    }
+
+    const share = await getShareByCode(parsed.code);
+    if (!share) {
+      return unavailableImageResponse(parsed.ext);
+    }
+
+    const image = await getImage(share.imageId);
+    if (!image || image.ext !== parsed.ext) {
+      return unavailableImageResponse(parsed.ext);
+    }
+
     const data = await getImageBuffer(
       image.baseName,
       image.ext,
@@ -68,7 +76,10 @@ export async function GET(
       },
     });
   } catch {
-    return new Response("Not found", { status: 404 });
+    if (!parsed) {
+      return new Response("Service temporarily unavailable.", { status: 503 });
+    }
+    return unavailableImageResponse(parsed.ext);
   }
 }
 

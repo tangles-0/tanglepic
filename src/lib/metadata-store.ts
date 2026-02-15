@@ -474,8 +474,38 @@ export async function deleteSharesForUserByImageIds(
 export type AlbumShare = {
   id: string;
   albumId: string;
+  code?: string | null;
   createdAt: string;
 };
+
+async function generateAlbumShareCode(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const raw = randomBytes(6);
+    const code = raw
+      .toString("base64url")
+      .replace(/[-_]/g, "0")
+      .slice(0, SHARE_CODE_LENGTH);
+    const [existing] = await db
+      .select({ id: albumShares.id })
+      .from(albumShares)
+      .where(eq(albumShares.code, code))
+      .limit(1);
+    if (!existing) {
+      return code;
+    }
+  }
+  return randomUUID().replace(/-/g, "").slice(0, SHARE_CODE_LENGTH);
+}
+
+async function ensureAlbumShareCode(shareId: string): Promise<string> {
+  const code = await generateAlbumShareCode();
+  const [updated] = await db
+    .update(albumShares)
+    .set({ code })
+    .where(and(eq(albumShares.id, shareId), sql`${albumShares.code} is null`))
+    .returning({ code: albumShares.code });
+  return updated?.code ?? code;
+}
 
 export async function getAlbumShareForUser(
   albumId: string,
@@ -491,9 +521,11 @@ export async function getAlbumShareForUser(
     return undefined;
   }
 
+  const code = row.code ?? (await ensureAlbumShareCode(row.id));
   return {
     id: row.id,
     albumId: row.albumId,
+    code,
     createdAt: row.createdAt.toISOString(),
   };
 }
@@ -513,15 +545,17 @@ export async function createAlbumShare(
   }
 
   const shareId = randomUUID();
+  const code = await generateAlbumShareCode();
   const createdAt = new Date();
   await db.insert(albumShares).values({
     id: shareId,
     userId,
     albumId,
+    code,
     createdAt,
   });
 
-  return { id: shareId, albumId, createdAt: createdAt.toISOString() };
+  return { id: shareId, albumId, code, createdAt: createdAt.toISOString() };
 }
 
 export async function deleteAlbumShareForUser(
@@ -549,9 +583,30 @@ export async function getAlbumShareById(
     return undefined;
   }
 
+  const code = row.code ?? (await ensureAlbumShareCode(row.id));
   return {
     id: row.id,
     albumId: row.albumId,
+    code,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
+export async function getAlbumShareByCode(code: string): Promise<AlbumShare | undefined> {
+  const [row] = await db
+    .select()
+    .from(albumShares)
+    .where(eq(albumShares.code, code))
+    .limit(1);
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    albumId: row.albumId,
+    code: row.code,
     createdAt: row.createdAt.toISOString(),
   };
 }

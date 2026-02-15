@@ -35,8 +35,13 @@ pnpm db:push
 
 # TODO:
 
-- ability to rotate images
 - [x] give album view the same controls / layout as gallery view
-- ability to edit album display order - drag n drop tiles to reorder, and a 'move up' / 'move down' button on each tile
-- next / prev buttons when viewing image in modal on a gallery / album
+- [x] next / prev buttons when viewing image in modal on a gallery / album
 - [x] support .gifs
+- [ ] ability to rotate images
+- [ ] ability to edit album display order - drag n drop 'up' / 'down' btns
+- [ ] add landon's ditherspace
+- [ ] keyboard shortcuts
+- [ ] TUI
+- [ ] support video formats
+- [ ] support any file format

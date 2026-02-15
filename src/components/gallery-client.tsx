@@ -165,6 +165,14 @@ export default function GalleryClient({
     () => Array.from(selected).filter((id) => visibleIds.has(id)),
     [selected, visibleIds],
   );
+  const activeIndex = useMemo(() => {
+    if (!active) {
+      return -1;
+    }
+    return displayItems.findIndex((item) => item.id === active.id);
+  }, [active, displayItems]);
+  const hasPrevious = activeIndex > 0;
+  const hasNext = activeIndex >= 0 && activeIndex < displayItems.length - 1;
 
   async function uploadFiles(files: FileList | File[]) {
     const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
@@ -233,6 +241,28 @@ export default function GalleryClient({
     setActive(null);
     setShare(null);
     setShareError(null);
+  }
+
+  function openPreviousImage() {
+    if (!hasPrevious) {
+      return;
+    }
+    const previous = displayItems[activeIndex - 1];
+    if (!previous) {
+      return;
+    }
+    void openModal(previous);
+  }
+
+  function openNextImage() {
+    if (!hasNext) {
+      return;
+    }
+    const next = displayItems[activeIndex + 1];
+    if (!next) {
+      return;
+    }
+    void openModal(next);
   }
 
   async function copyText(text: string, label: string) {
@@ -393,6 +423,36 @@ export default function GalleryClient({
     }
   }, [items, onImagesChange]);
 
+  useEffect(() => {
+    if (!active) {
+      return;
+    }
+    if (activeIndex === -1) {
+      closeModal();
+      return;
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        openPreviousImage();
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        openNextImage();
+        return;
+      }
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeModal();
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [active, activeIndex, displayItems, hasNext, hasPrevious]);
+
   return (
     <>
       {globalDragging ? (
@@ -535,14 +595,37 @@ export default function GalleryClient({
               <div>
                 <h2 className="text-lg font-semibold">Image details</h2>
                 <p className="text-xs text-neutral-500">{active.baseName}</p>
+                {activeIndex >= 0 ? (
+                  <p className="text-xs text-neutral-500">
+                    {activeIndex + 1} / {displayItems.length}
+                  </p>
+                ) : null}
               </div>
-              <button
-                type="button"
-                onClick={closeModal}
-                className="rounded border border-neutral-200 px-2 py-1 text-xs"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={openPreviousImage}
+                  disabled={!hasPrevious}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={openNextImage}
+                  disabled={!hasNext}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
+                >
+                  Next
+                </button>
+                <button
+                  type="button"
+                  onClick={closeModal}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[2fr,1fr]">

@@ -32,7 +32,7 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ share: null });
   }
 
-  const baseUrl = `/share/album/${share.id}`;
+  const baseUrl = `/share/${share.code ?? share.id}`;
   return NextResponse.json({ share, url: baseUrl });
 }
 
@@ -56,7 +56,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   return NextResponse.json({
     share,
-    url: `/share/album/${share.id}`,
+    url: `/share/${share.code ?? share.id}`,
   });
 }
 

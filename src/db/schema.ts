@@ -84,6 +84,7 @@ export const albumShares = pgTable("album_shares", {
   albumId: text("album_id")
     .notNull()
     .references(() => albums.id),
+  code: text("code").unique(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
 });
 

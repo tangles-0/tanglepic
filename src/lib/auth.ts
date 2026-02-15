@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
+import { isDatabaseUnavailableError } from "@/lib/db-errors";
 
 type LoginAttempt = {
   count: number;
@@ -52,6 +53,15 @@ function checkLoginRateLimit(key: string): boolean {
 
 function resetLoginRateLimit(key: string): void {
   loginAttempts.delete(key);
+}
+
+async function userExists(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return Boolean(row);
 }
 
 export const authOptions: NextAuthOptions = {
@@ -103,6 +113,24 @@ export const authOptions: NextAuthOptions = {
     async jwt({ token, user }) {
       if (user?.id) {
         token.sub = user.id;
+        return token;
+      }
+
+      if (!token.sub) {
+        return token;
+      }
+
+      try {
+        const exists = await userExists(token.sub);
+        if (!exists) {
+          // Invalidate stale JWT-backed sessions when the user no longer exists.
+          return {};
+        }
+      } catch (error) {
+        if (isDatabaseUnavailableError(error)) {
+          return {};
+        }
+        throw error;
       }
       return token;
     },
@@ -118,14 +146,31 @@ export const authOptions: NextAuthOptions = {
       if (!user?.id) {
         return;
       }
-      await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+      try {
+        await db.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+      } catch (error) {
+        if (!isDatabaseUnavailableError(error)) {
+          throw error;
+        }
+      }
     },
   },
 };
 
 export async function getSessionUserId(): Promise<string | null> {
-  const session = await getServerSession(authOptions);
-  const userId = (session?.user as { id?: string } | undefined)?.id;
-  return userId ?? null;
+  try {
+    const session = await getServerSession(authOptions);
+    const userId = (session?.user as { id?: string } | undefined)?.id;
+    if (!userId) {
+      return null;
+    }
+    const exists = await userExists(userId);
+    return exists ? userId : null;
+  } catch (error) {
+    if (isDatabaseUnavailableError(error)) {
+      return null;
+    }
+    throw error;
+  }
 }
 
