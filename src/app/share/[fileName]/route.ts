@@ -1,4 +1,5 @@
 import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { getImageBuffer } from "@/lib/storage";
 import { getAlbumShareByCode, getImage, getShareByCode } from "@/lib/metadata-store";
 import { unavailableImageResponse } from "@/lib/unavailable-image";
@@ -42,20 +43,8 @@ export async function GET(
     if (!parsed && /^[A-Za-z0-9]+$/.test(fileName)) {
       const albumShare = await getAlbumShareByCode(fileName);
       if (albumShare) {
-        // Forward internally so the short share URL remains in the browser.
-        const upstream = await fetch(new URL(`/share/album/${albumShare.id}`, request.url), {
-          headers: request.headers,
-          cache: "no-store",
-        });
-        const headers = new Headers(upstream.headers);
-        headers.delete("content-encoding");
-        headers.delete("content-length");
-        headers.delete("transfer-encoding");
-        return new Response(upstream.body, {
-          status: upstream.status,
-          statusText: upstream.statusText,
-          headers,
-        });
+        // Rewrite internally to avoid external host lookups through the proxy.
+        return NextResponse.rewrite(new URL(`/share/album/${albumShare.id}`, request.url));
       }
       return new Response("Not found", { status: 404 });
     }
