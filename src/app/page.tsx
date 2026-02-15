@@ -36,7 +36,7 @@ export default async function Home() {
           <img src="/latex-logo.png" alt="TanglePic"  width="24px" />
         
         </div> */}
-        <h1 className="text-2xl font-semibold">LaTeX <span className="font-medium">img_srv:/$</span></h1>
+        <h1 className="text-2xl font-semibold">LaTeX <span className="font-medium">img_srv</span></h1>
         <p className="text-neutral-600">
           create acct to upload imgs, mkdir albums, and create symlinks to send to frendz/foez
         </p>
