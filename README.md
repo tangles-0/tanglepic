@@ -39,7 +39,7 @@ _Also for videos and other files (later)_
 - [x] support .gifs
 - [x] add github link
 - [x] add download button
-- [ ] ability to rotate images
+- [x] ability to rotate images
 - [ ] ability to edit album display order - drag n drop 'up' / 'down' btns
 - [ ] ability to rename albums (just click on the title and start typing)
 - [ ] ability to caption images in an album (caption applies to the image in the context of the image-in-that-album, not to the image, as images can be in more than one album)
