@@ -16,6 +16,7 @@ const MAX_640_SIZE = {
 } as const;
 
 export type ImageSize = "original" | "sm" | "lg" | "x640";
+export type RotationDirection = "left" | "right";
 
 type StorageBackend = "local" | "s3";
 
@@ -161,6 +162,55 @@ export async function deleteImageFiles(
   }
 }
 
+export async function rotateImageFiles(
+  baseName: string,
+  ext: string,
+  uploadedAt: Date,
+  direction: RotationDirection,
+): Promise<{
+  width: number;
+  height: number;
+  sizeOriginal: number;
+  sizeSm: number;
+  sizeLg: number;
+}> {
+  const outputFormat = outputFormatFromExt(ext);
+  const angle = direction === "right" ? 90 : -90;
+
+  const [original, sm, lg] = await Promise.all([
+    readStoredBuffer(baseName, ext, "original", uploadedAt),
+    readStoredBuffer(baseName, ext, "sm", uploadedAt),
+    readStoredBuffer(baseName, ext, "lg", uploadedAt),
+  ]);
+
+  const [rotatedOriginal, rotatedSm, rotatedLg] = await Promise.all([
+    encodeOutput(sharp(original).rotate(angle), outputFormat, 85),
+    encodeOutput(sharp(sm).rotate(angle), outputFormat, 80),
+    encodeOutput(sharp(lg).rotate(angle), outputFormat, 82),
+  ]);
+
+  await Promise.all([
+    writeStoredBuffer(baseName, ext, "original", uploadedAt, rotatedOriginal),
+    writeStoredBuffer(baseName, ext, "sm", uploadedAt, rotatedSm),
+    writeStoredBuffer(baseName, ext, "lg", uploadedAt, rotatedLg),
+  ]);
+
+  const x640Exists = await hasImageVariant(baseName, ext, "x640", uploadedAt);
+  if (x640Exists) {
+    const rotated640 = await generate640Buffer(rotatedOriginal, ext);
+    await writeStoredBuffer(baseName, ext, "x640", uploadedAt, rotated640);
+  }
+
+  const metadata = await sharp(rotatedOriginal).metadata();
+  return {
+    width: metadata.width ?? 0,
+    height: metadata.height ?? 0,
+    sizeOriginal: rotatedOriginal.length,
+    sizeSm: rotatedSm.length,
+    sizeLg: rotatedLg.length,
+  };
+}
+
 type OutputFormat = {
   ext: string;
   format: "jpeg" | "png" | "webp" | "gif";
@@ -292,6 +342,20 @@ async function writeStoredBuffer(
   }
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, data);
+}
+
+export async function hasImageVariant(
+  baseName: string,
+  ext: string,
+  size: ImageSize,
+  uploadedAt: Date,
+): Promise<boolean> {
+  try {
+    await readStoredBuffer(baseName, ext, size, uploadedAt);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function outputFormatFromExt(ext: string): OutputFormat {

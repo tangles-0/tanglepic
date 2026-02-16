@@ -8,8 +8,12 @@ import { LightCaretRight } from '@energiz3r/icon-library/Icons/Light/LightCaretR
 import { LightCaretLeft } from '@energiz3r/icon-library/Icons/Light/LightCaretLeft';
 import { LightTimes } from '@energiz3r/icon-library/Icons/Light/LightTimes';
 import { LightDownload } from '@energiz3r/icon-library/Icons/Light/LightDownload';
+import { LightUndo } from '@energiz3r/icon-library/Icons/Light/LightUndo';
+import { LightRedo } from '@energiz3r/icon-library/Icons/Light/LightRedo';
+import { SharePill } from "./share-pill";
 
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
+const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 
 type GalleryImage = {
   id: string;
@@ -18,6 +22,9 @@ type GalleryImage = {
   albumId?: string;
   width: number;
   height: number;
+  sizeOriginal?: number;
+  sizeSm?: number;
+  sizeLg?: number;
   uploadedAt: string;
   shared?: boolean;
 };
@@ -36,6 +43,8 @@ type UploadMessage = {
   text: string;
   tone: "success" | "error";
 };
+
+type RotationDirection = "left" | "right";
 
 export default function GalleryClient({
   images,
@@ -56,6 +65,8 @@ export default function GalleryClient({
   const [shareError, setShareError] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [isGenerating640, setIsGenerating640] = useState(false);
+  const [isChecking640, setIsChecking640] = useState(false);
+  const [has640Variant, setHas640Variant] = useState<boolean | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [albums, setAlbums] = useState<{ id: string; name: string }[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -66,6 +77,9 @@ export default function GalleryClient({
   const [globalDragging, setGlobalDragging] = useState(false);
   const [messages, setMessages] = useState<UploadMessage[]>([]);
   const [showAlbumImages, setShowAlbumImages] = useState(true);
+  const [isRotating, setIsRotating] = useState(false);
+  const [rotateError, setRotateError] = useState<string | null>(null);
+  const [imageVersionBumps, setImageVersionBumps] = useState<Record<string, number>>({});
   const dragCounter = useRef(0);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -158,12 +172,17 @@ export default function GalleryClient({
 
   const displayItems = useMemo(
     () =>
-      filteredItems.map((image) => ({
-        ...image,
-        thumbUrl: `/image/${image.id}/${image.baseName}-sm.${image.ext}`,
-        fullUrl: `/image/${image.id}/${image.baseName}.${image.ext}`,
-      })),
-    [filteredItems],
+      filteredItems.map((image) => {
+        const cacheBust = imageVersionBumps[image.id];
+        const cacheBustSuffix = cacheBust ? `?v=${cacheBust}` : "";
+        return {
+          ...image,
+          thumbUrl: `/image/${image.id}/${image.baseName}-sm.${image.ext}${cacheBustSuffix}`,
+          fullUrl: `/image/${image.id}/${image.baseName}.${image.ext}${cacheBustSuffix}`,
+          lgUrl: `/image/${image.id}/${image.baseName}-lg.${image.ext}${cacheBustSuffix}`,
+        };
+      }),
+    [filteredItems, imageVersionBumps],
   );
 
   const visibleIds = useMemo(() => new Set(filteredItems.map((image) => image.id)), [filteredItems]);
@@ -179,6 +198,8 @@ export default function GalleryClient({
   }, [active, displayItems]);
   const hasPrevious = activeIndex > 0;
   const hasNext = activeIndex >= 0 && activeIndex < displayItems.length - 1;
+  const activeDisplayItem = activeIndex >= 0 ? displayItems[activeIndex] : null;
+  const canRotateActive = active ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
 
   async function uploadFiles(files: FileList | File[]) {
     const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
@@ -217,6 +238,9 @@ export default function GalleryClient({
     setActive(image);
     setShare(null);
     setShareError(null);
+    setRotateError(null);
+    setHas640Variant(null);
+    setIsChecking640(false);
 
     try {
       const response = await fetch(`/api/shares?imageId=${image.id}`);
@@ -237,6 +261,7 @@ export default function GalleryClient({
             item.id === image.id ? { ...item, shared: true } : item,
           ),
         );
+        void check640Variant(image.id);
       }
     } catch (error) {
       setShareError(error instanceof Error ? error.message : "Unable to load share info.");
@@ -247,6 +272,9 @@ export default function GalleryClient({
     setActive(null);
     setShare(null);
     setShareError(null);
+    setRotateError(null);
+    setHas640Variant(null);
+    setIsChecking640(false);
   }
 
   function openPreviousImage() {
@@ -281,6 +309,16 @@ export default function GalleryClient({
     return url.replace(/\.([a-zA-Z0-9]+)$/, "-640.$1");
   }
 
+  function formatBytes(bytes?: number): string {
+    if (!bytes || bytes <= 0) {
+      return "Unknown";
+    }
+    const units = ["B", "KB", "MB", "GB", "TB"];
+    const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / 1024 ** exponent;
+    return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
+  }
+
   async function enableShare(image: GalleryImage): Promise<ShareInfo | null> {
     setShareError(null);
     const response = await fetch("/api/shares", {
@@ -298,6 +336,7 @@ export default function GalleryClient({
     const payload = (await response.json()) as { share: { id: string }; urls: ShareInfo["urls"] };
     const nextShare = { id: payload.share.id, urls: payload.urls };
     setShare(nextShare);
+    void check640Variant(image.id);
     setItems((current) =>
       current.map((item) =>
         item.id === image.id ? { ...item, shared: true } : item,
@@ -321,6 +360,8 @@ export default function GalleryClient({
     }
 
     setShare(null);
+    setHas640Variant(null);
+    setIsChecking640(false);
     setItems((current) =>
       current.map((item) =>
         item.id === image.id ? { ...item, shared: false } : item,
@@ -329,25 +370,109 @@ export default function GalleryClient({
   }
 
   async function generate640Link(image: GalleryImage) {
+    if (!share) {
+      setShareError("Enable sharing to create a 640x480 link.");
+      return;
+    }
     setShareError(null);
     setIsGenerating640(true);
     try {
-      const currentShare = share ?? (await enableShare(image));
-      if (!currentShare) {
-        return;
-      }
-
-      const variantUrl = to640VariantUrl(currentShare.urls.original);
+      const variantUrl = to640VariantUrl(share.urls.original);
       const response = await fetch(variantUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error("Unable to generate 640x480 image.");
       }
 
+      setHas640Variant(true);
       await copyText(`${origin}${variantUrl}`, "640");
     } catch (error) {
       setShareError(error instanceof Error ? error.message : "Unable to generate 640x480 link.");
     } finally {
       setIsGenerating640(false);
+    }
+  }
+
+  async function check640Variant(imageId: string) {
+    setIsChecking640(true);
+    try {
+      const response = await fetch(`/api/images/640?imageId=${encodeURIComponent(imageId)}`, {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        setHas640Variant(false);
+        return;
+      }
+      const payload = (await response.json()) as { exists?: boolean };
+      setHas640Variant(Boolean(payload.exists));
+    } catch {
+      setHas640Variant(false);
+    } finally {
+      setIsChecking640(false);
+    }
+  }
+
+  async function rotateImage(direction: RotationDirection) {
+    if (!active || isRotating || !canRotateActive) {
+      return;
+    }
+    setRotateError(null);
+    setIsRotating(true);
+    try {
+      const response = await fetch("/api/images/rotate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageId: active.id,
+          direction,
+        }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        image?: { width: number; height: number; sizeOriginal?: number; sizeSm?: number; sizeLg?: number };
+      };
+      if (!response.ok || !payload.image) {
+        throw new Error(payload.error ?? "Unable to rotate image.");
+      }
+
+      const nextWidth = payload.image.width;
+      const nextHeight = payload.image.height;
+      const nextSizeOriginal = payload.image.sizeOriginal;
+      const nextSizeSm = payload.image.sizeSm;
+      const nextSizeLg = payload.image.sizeLg;
+      setItems((current) =>
+        current.map((item) =>
+          item.id === active.id
+            ? {
+              ...item,
+              width: nextWidth,
+              height: nextHeight,
+              sizeOriginal: nextSizeOriginal,
+              sizeSm: nextSizeSm,
+              sizeLg: nextSizeLg,
+            }
+            : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === active.id
+          ? {
+            ...current,
+            width: nextWidth,
+            height: nextHeight,
+             sizeOriginal: nextSizeOriginal,
+             sizeSm: nextSizeSm,
+             sizeLg: nextSizeLg,
+          }
+          : current,
+      );
+      setImageVersionBumps((current) => ({
+        ...current,
+        [active.id]: Date.now(),
+      }));
+    } catch (error) {
+      setRotateError(error instanceof Error ? error.message : "Unable to rotate image.");
+    } finally {
+      setIsRotating(false);
     }
   }
 
@@ -503,11 +628,10 @@ export default function GalleryClient({
           {messages.map((item) => (
             <div
               key={item.id}
-              className={`rounded border px-3 py-2 text-xs shadow ${
-                item.tone === "success"
+              className={`rounded border px-3 py-2 text-xs shadow ${item.tone === "success"
                   ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                   : "border-red-200 bg-red-50 text-red-700"
-              }`}
+                }`}
             >
               {item.text}
             </div>
@@ -572,11 +696,7 @@ export default function GalleryClient({
               key={image.id}
               className="gallery-tile relative overflow-hidden rounded-md border border-neutral-200 text-left"
             >
-              {image.shared ? (
-                <span className="absolute left-2 top-11 z-10 rounded bg-emerald-600 px-2 py-1 font-medium text-white">
-                  shared
-                </span>
-              ) : null}
+              <SharePill isShared={image.shared} absolutePosition />
               <FancyCheckbox
                 className="tile-control absolute left-2 top-2 z-10 text-xs"
                 checked={selected.has(image.id)}
@@ -668,6 +788,34 @@ export default function GalleryClient({
                 </button>
                 <button
                   type="button"
+                  onClick={() => void rotateImage("left")}
+                  disabled={!canRotateActive || isRotating}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
+                  aria-label="Rotate image left"
+                  title={
+                    canRotateActive
+                      ? "Rotate left 90 degrees"
+                      : "Rotation is only available for JPG and PNG images."
+                  }
+                >
+                  <LightUndo className="h-4 w-4" fill="currentColor" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void rotateImage("right")}
+                  disabled={!canRotateActive || isRotating}
+                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
+                  aria-label="Rotate image right"
+                  title={
+                    canRotateActive
+                      ? "Rotate right 90 degrees"
+                      : "Rotation is only available for JPG and PNG images."
+                  }
+                >
+                  <LightRedo className="h-4 w-4" fill="currentColor" />
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     const downloadUrl = `/image/${active.id}/${active.baseName}.${active.ext}`;
                     const link = document.createElement("a");
@@ -695,46 +843,37 @@ export default function GalleryClient({
 
             <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[2fr,1fr]">
               <img
-                src={`/image/${active.id}/${active.baseName}-lg.${active.ext}`}
+                src={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
                 alt="Uploaded"
                 className="max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
               />
 
               <div className="min-w-0 space-y-3">
-                <div className="rounded border border-neutral-200 p-3 text-xs text-neutral-600">
-                  <div>Dimensions: {active.width}×{active.height}</div>
-                  <div>Uploaded: {new Date(active.uploadedAt).toLocaleString()}</div>
-                </div>
-
-                <div className="flex items-center justify-between rounded border border-neutral-200 px-3 py-2 text-xs">
-                  <span className="text-neutral-600">
-                    sharing: {share ? "enabled" : "disabled"}
-                  </span>
-                  <div className="flex items-center gap-2">
+                <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded border border-neutral-200 p-3 text-xs text-neutral-600">
+                  <div className="min-w-0">
+                    <div>Dimensions: {active.width}×{active.height}</div>
+                    <div>File size: {formatBytes(active.sizeOriginal)}</div>
+                    <div>Uploaded: {new Date(active.uploadedAt).toLocaleString()}</div>
+                  </div>
+                  <div className="justify-self-center">
+                    <SharePill isShared={Boolean(share)} shouldShowOff />
+                  </div>
+                  <div className="justify-self-end">
                     <button
                       type="button"
                       onClick={() =>
                         void (share ? disableShare(active) : enableShare(active))
                       }
-                      className={`rounded px-3 py-1 text-xs ${
-                        share ? "bg-black text-white" : "border border-neutral-200"
-                      }`}
+                      className={`rounded px-3 py-1 text-xs ${share ? "bg-black text-white" : "border border-neutral-200"
+                        }`}
                     >
                       {share ? "disable" : "enable"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => void generate640Link(active)}
-                      disabled={isGenerating640}
-                      className="rounded border border-neutral-200 px-3 py-1 text-xs disabled:opacity-50"
-                    >
-                      generate 640x480 link
-                    </button>
                   </div>
                 </div>
-                {copied === "640" ? <p className="text-[11px] text-emerald-600">Copied 640 link</p> : null}
 
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
+                {rotateError ? <p className="text-xs text-red-600">{rotateError}</p> : null}
 
                 {share ? (
                   <div className="space-y-3">
@@ -743,14 +882,11 @@ export default function GalleryClient({
                       <button
                         type="button"
                         onClick={() => copyText(`${origin}${share.urls.original}`, "direct")}
-                        className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs"
+                        className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "direct" ? "text-emerald-600" : ""}`}
                       >
-                        {origin}
-                        {share.urls.original}
+                        {copied === "direct" ? "Copied link to clipboard!" : 
+                        `${origin}${share.urls.original}`}
                       </button>
-                      {copied === "direct" ? (
-                        <span className="text-[11px] text-emerald-600">Copied</span>
-                      ) : null}
                     </div>
 
                     <div className="space-y-2">
@@ -760,14 +896,11 @@ export default function GalleryClient({
                         onClick={() =>
                           copyText(`[img]${origin}${share.urls.original}[/img]`, "bbcode")
                         }
-                        className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs"
+                        className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "bbcode" ? "text-emerald-600" : ""}`}
                       >
-                        [img]{origin}
-                        {share.urls.original}[/img]
+                        {copied === "bbcode" ? "Copied link to clipboard!" : 
+                        `[img]${origin}${share.urls.original}[/img]`}
                       </button>
-                      {copied === "bbcode" ? (
-                        <span className="text-[11px] text-emerald-600">Copied</span>
-                      ) : null}
                     </div>
 
                     <div className="space-y-2">
@@ -782,19 +915,49 @@ export default function GalleryClient({
                             "linked",
                           )
                         }
-                        className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs"
+                        className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "linked" ? "text-emerald-600" : ""}`}
                       >
-                        [url={origin}
-                        {share.urls.original}][img]{origin}
-                        {share.urls.sm}[/img][/url]
+                        {copied === "linked" ? "Copied link to clipboard!" : 
+                        `[url=${origin}${share.urls.original}][img]${origin}${share.urls.sm}[/img][/url]`}
                       </button>
-                      {copied === "linked" ? (
-                        <span className="text-[11px] text-emerald-600">Copied</span>
-                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-xs font-medium text-neutral-600">
+                        Direct link (max size 640x480)
+                      </label>
+                      {isChecking640 ? (
+                        <div className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs text-neutral-500">
+                          Checking 640x480 variant...
+                        </div>
+                      ) : has640Variant ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyText(
+                              `${origin}${to640VariantUrl(share.urls.original)}`,
+                              "640",
+                            )
+                          }
+                          className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "640" ? "text-emerald-600" : ""}`}
+                        >
+                          {copied === "640" ? "Copied link to clipboard!" : 
+                          `${origin}${to640VariantUrl(share.urls.original)}`}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void generate640Link(active)}
+                          disabled={isGenerating640}
+                          className="w-full rounded border border-neutral-200 px-3 py-2 text-xs disabled:opacity-50"
+                        >
+                          {isGenerating640 ? "Generating..." : "Generate 640x480 image"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-neutral-500">
+                  <p className="text-xs text-neutral-500 text-center">
                     Share links are disabled for this image.
                   </p>
                 )}

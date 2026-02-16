@@ -372,6 +372,47 @@ export async function getImageForUser(
   };
 }
 
+export async function updateImageMetadataForUser(
+  imageId: string,
+  userId: string,
+  updates: {
+    width: number;
+    height: number;
+    sizeOriginal: number;
+    sizeSm: number;
+    sizeLg: number;
+  },
+): Promise<ImageEntry | undefined> {
+  const [row] = await db
+    .update(images)
+    .set({
+      width: updates.width,
+      height: updates.height,
+      sizeOriginal: updates.sizeOriginal,
+      sizeSm: updates.sizeSm,
+      sizeLg: updates.sizeLg,
+    })
+    .where(and(eq(images.id, imageId), eq(images.userId, userId)))
+    .returning();
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    albumId: row.albumId ?? undefined,
+    baseName: row.baseName,
+    ext: row.ext,
+    width: row.width,
+    height: row.height,
+    sizeOriginal: row.sizeOriginal,
+    sizeSm: row.sizeSm,
+    sizeLg: row.sizeLg,
+    uploadedAt: row.uploadedAt.toISOString(),
+  };
+}
+
 export async function createShare(
   imageId: string,
   userId: string,
