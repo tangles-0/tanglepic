@@ -54,6 +54,8 @@ export const images = pgTable("images", {
     .notNull()
     .references(() => users.id),
   albumId: text("album_id").references(() => albums.id),
+  albumCaption: text("album_caption"),
+  albumOrder: integer("album_order").notNull().default(0),
   baseName: text("base_name").notNull(),
   ext: text("ext").notNull().default("jpg"),
   width: integer("width").notNull(),

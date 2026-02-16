@@ -6,6 +6,7 @@ type AlbumImage = {
   ext: string;
   width: number;
   height: number;
+  albumCaption?: string;
   uploadedAt: string;
 };
 
@@ -41,6 +42,9 @@ export default function AlbumShareView({
             <div className="mt-3 text-xs text-neutral-500">
               {image.width}×{image.height} • {formatTimestamp(image.uploadedAt)}
             </div>
+            {image.albumCaption ? (
+              <p className="mt-2 text-xs text-neutral-700">{image.albumCaption}</p>
+            ) : null}
           </div>
         ))}
       </div>

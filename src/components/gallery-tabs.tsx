@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import GalleryClient from "@/components/gallery-client";
+import { LightPencil } from '@energiz3r/icon-library/Icons/Light/LightPencil';
 
 const HIDE_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-hide-album-images";
 
@@ -42,6 +43,9 @@ export default function GalleryTabs({
   const [newAlbumName, setNewAlbumName] = useState("");
   const [createError, setCreateError] = useState<string | null>(null);
   const [albumToDelete, setAlbumToDelete] = useState<AlbumInfo | null>(null);
+  const [albumToRename, setAlbumToRename] = useState<AlbumInfo | null>(null);
+  const [renameAlbumName, setRenameAlbumName] = useState("");
+  const [renameError, setRenameError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [hideAlbumImages, setHideAlbumImages] = useState(false);
   const [delBtnLabel, setDelBtnLabel] = useState("del album");
@@ -131,6 +135,36 @@ export default function GalleryTabs({
     setAlbumToDelete(null);
   }
 
+  async function renameAlbum() {
+    if (!albumToRename) {
+      return;
+    }
+    const name = renameAlbumName.trim();
+    if (!name) {
+      setRenameError("Album name is required.");
+      return;
+    }
+    setRenameError(null);
+    const response = await fetch(`/api/albums/${albumToRename.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      setRenameError(payload.error ?? "Unable to rename album.");
+      return;
+    }
+    const payload = (await response.json()) as { album: AlbumInfo };
+    setAlbumItems((current) =>
+      current
+        .map((item) => (item.id === payload.album.id ? payload.album : item))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
+    setAlbumToRename(null);
+    setRenameAlbumName("");
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 text-xs">
@@ -210,6 +244,21 @@ export default function GalleryTabs({
                       {album.previews.length} preview{album.previews.length === 1 ? "" : "s"}
                     </div>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setRenameError(null);
+                      setAlbumToRename({ id: album.id, name: album.name });
+                      setRenameAlbumName(album.name);
+                    }}
+                    className="tile-control absolute right-10 top-2 rounded p-1 text-[11px]"
+                    aria-label="rename album"
+                    title="rename album"
+                  >
+                    <LightPencil className="h-4 w-4" fill="currentColor" />
+                  </button>
                   <button
                     type="button"
                     onClick={(event) => {
@@ -295,6 +344,42 @@ export default function GalleryTabs({
                     onMouseLeave={() => setDelBtnLabel("del album")}
                   >
                     {delBtnLabel}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {albumToRename ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
+              <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
+                <h3 className="text-lg font-semibold">rename album</h3>
+                <p className="mt-1 text-xs text-neutral-500">
+                  give this album a fresh new label.
+                </p>
+                <input
+                  className="mt-4 w-full rounded border px-3 py-2"
+                  placeholder="album name"
+                  value={renameAlbumName}
+                  onChange={(event) => setRenameAlbumName(event.target.value)}
+                />
+                {renameError ? (
+                  <p className="mt-2 text-xs text-red-600">{renameError}</p>
+                ) : null}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAlbumToRename(null)}
+                    className="rounded border border-neutral-200 px-3 py-1 text-xs"
+                  >
+                    cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void renameAlbum()}
+                    className="rounded bg-black px-3 py-1 text-xs text-white"
+                  >
+                    save
                   </button>
                 </div>
               </div>

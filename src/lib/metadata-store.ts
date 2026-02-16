@@ -1,5 +1,5 @@
 import { randomUUID, randomBytes } from "crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   albumShares,
@@ -21,6 +21,8 @@ export type Album = {
 export type ImageEntry = {
   id: string;
   albumId?: string;
+  albumCaption?: string;
+  albumOrder: number;
   baseName: string;
   ext: string;
   width: number;
@@ -40,6 +42,23 @@ export type ShareLink = {
 };
 
 const SHARE_CODE_LENGTH = 8;
+
+function mapImageRow(row: typeof images.$inferSelect): ImageEntry {
+  return {
+    id: row.id,
+    albumId: row.albumId ?? undefined,
+    albumCaption: row.albumCaption ?? undefined,
+    albumOrder: row.albumOrder,
+    baseName: row.baseName,
+    ext: row.ext,
+    width: row.width,
+    height: row.height,
+    sizeOriginal: row.sizeOriginal,
+    sizeSm: row.sizeSm,
+    sizeLg: row.sizeLg,
+    uploadedAt: row.uploadedAt.toISOString(),
+  };
+}
 
 async function generateShareCode(): Promise<string> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -107,6 +126,28 @@ export async function getAlbumForUser(
   };
 }
 
+export async function renameAlbumForUser(
+  albumId: string,
+  userId: string,
+  name: string,
+): Promise<Album | undefined> {
+  const [row] = await db
+    .update(albums)
+    .set({ name })
+    .where(and(eq(albums.id, albumId), eq(albums.userId, userId)))
+    .returning();
+
+  if (!row) {
+    return undefined;
+  }
+
+  return {
+    id: row.id,
+    name: row.name,
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 export async function deleteAlbumForUser(
   albumId: string,
   userId: string,
@@ -152,14 +193,24 @@ export async function getAlbumPublic(albumId: string): Promise<Album | undefined
 }
 
 export async function addImage(
-  entry: Omit<ImageEntry, "id"> & { userId: string },
+  entry: Omit<ImageEntry, "id" | "albumOrder"> & { albumOrder?: number; userId: string },
 ): Promise<ImageEntry> {
   const imageId = randomUUID();
   const uploadedAt = new Date(entry.uploadedAt);
+  let albumOrder = entry.albumOrder ?? 0;
+  if (entry.albumId && typeof entry.albumOrder !== "number") {
+    const [maxOrderRow] = await db
+      .select({ value: sql<number>`coalesce(max(${images.albumOrder}), 0)` })
+      .from(images)
+      .where(and(eq(images.userId, entry.userId), eq(images.albumId, entry.albumId)));
+    albumOrder = Number(maxOrderRow?.value ?? 0) + 1;
+  }
   await db.insert(images).values({
     id: imageId,
     userId: entry.userId,
     albumId: entry.albumId ?? null,
+    albumCaption: entry.albumCaption ?? null,
+    albumOrder,
     baseName: entry.baseName,
     ext: entry.ext,
     width: entry.width,
@@ -170,7 +221,12 @@ export async function addImage(
     uploadedAt,
   });
 
-  return { ...entry, id: imageId, uploadedAt: uploadedAt.toISOString() };
+  return {
+    ...entry,
+    id: imageId,
+    albumOrder,
+    uploadedAt: uploadedAt.toISOString(),
+  };
 }
 
 export async function listImagesForUser(userId: string): Promise<ImageEntry[]> {
@@ -182,16 +238,7 @@ export async function listImagesForUser(userId: string): Promise<ImageEntry[]> {
     .orderBy(desc(images.uploadedAt));
 
   return rows.map((row) => ({
-    id: row.image.id,
-    albumId: row.image.albumId ?? undefined,
-    baseName: row.image.baseName,
-    ext: row.image.ext,
-    width: row.image.width,
-    height: row.image.height,
-    sizeOriginal: row.image.sizeOriginal,
-    sizeSm: row.image.sizeSm,
-    sizeLg: row.image.sizeLg,
-    uploadedAt: row.image.uploadedAt.toISOString(),
+    ...mapImageRow(row.image),
     shared: Boolean(row.shareId),
   }));
 }
@@ -205,19 +252,10 @@ export async function listImagesForAlbum(
     .from(images)
     .leftJoin(shares, and(eq(shares.imageId, images.id), eq(shares.userId, userId)))
     .where(and(eq(images.userId, userId), eq(images.albumId, albumId)))
-    .orderBy(desc(images.uploadedAt));
+    .orderBy(asc(images.albumOrder), desc(images.uploadedAt));
 
   return rows.map((row) => ({
-    id: row.image.id,
-    albumId: row.image.albumId ?? undefined,
-    baseName: row.image.baseName,
-    ext: row.image.ext,
-    width: row.image.width,
-    height: row.image.height,
-    sizeOriginal: row.image.sizeOriginal,
-    sizeSm: row.image.sizeSm,
-    sizeLg: row.image.sizeLg,
-    uploadedAt: row.image.uploadedAt.toISOString(),
+    ...mapImageRow(row.image),
     shared: Boolean(row.shareId),
   }));
 }
@@ -227,20 +265,9 @@ export async function listImagesForAlbumPublic(albumId: string): Promise<ImageEn
     .select()
     .from(images)
     .where(eq(images.albumId, albumId))
-    .orderBy(desc(images.uploadedAt));
+    .orderBy(asc(images.albumOrder), desc(images.uploadedAt));
 
-  return rows.map((row) => ({
-    id: row.id,
-    albumId: row.albumId ?? undefined,
-    baseName: row.baseName,
-    ext: row.ext,
-    width: row.width,
-    height: row.height,
-    sizeOriginal: row.sizeOriginal,
-    sizeSm: row.sizeSm,
-    sizeLg: row.sizeLg,
-    uploadedAt: row.uploadedAt.toISOString(),
-  }));
+  return rows.map((row) => mapImageRow(row));
 }
 
 export async function listImagesByIdsForUser(
@@ -256,18 +283,7 @@ export async function listImagesByIdsForUser(
     .from(images)
     .where(and(eq(images.userId, userId), inArray(images.id, imageIds)));
 
-  return rows.map((row) => ({
-    id: row.id,
-    albumId: row.albumId ?? undefined,
-    baseName: row.baseName,
-    ext: row.ext,
-    width: row.width,
-    height: row.height,
-    sizeOriginal: row.sizeOriginal,
-    sizeSm: row.sizeSm,
-    sizeLg: row.sizeLg,
-    uploadedAt: row.uploadedAt.toISOString(),
-  }));
+  return rows.map((row) => mapImageRow(row));
 }
 
 export async function getUserUploadStats(userId: string): Promise<{
@@ -297,10 +313,84 @@ export async function updateImagesAlbum(
     return;
   }
 
-  await db
+  if (!albumId) {
+    await db
+      .update(images)
+      .set({ albumId: null, albumCaption: null, albumOrder: 0 })
+      .where(and(eq(images.userId, userId), inArray(images.id, imageIds)));
+    return;
+  }
+
+  const [maxOrderRow] = await db
+    .select({ value: sql<number>`coalesce(max(${images.albumOrder}), 0)` })
+    .from(images)
+    .where(and(eq(images.userId, userId), eq(images.albumId, albumId)));
+  let nextOrder = Number(maxOrderRow?.value ?? 0) + 1;
+
+  for (const imageId of imageIds) {
+    await db
+      .update(images)
+      .set({ albumId, albumCaption: null, albumOrder: nextOrder })
+      .where(and(eq(images.userId, userId), eq(images.id, imageId)));
+    nextOrder += 1;
+  }
+}
+
+export async function reorderAlbumImagesForUser(
+  userId: string,
+  albumId: string,
+  orderedImageIds: string[],
+): Promise<boolean> {
+  if (orderedImageIds.length === 0) {
+    return true;
+  }
+
+  const rows = await db
+    .select({ id: images.id })
+    .from(images)
+    .where(
+      and(
+        eq(images.userId, userId),
+        eq(images.albumId, albumId),
+        inArray(images.id, orderedImageIds),
+      ),
+    );
+  if (rows.length !== orderedImageIds.length) {
+    return false;
+  }
+
+  for (const [index, imageId] of orderedImageIds.entries()) {
+    await db
+      .update(images)
+      .set({ albumOrder: index + 1 })
+      .where(and(eq(images.userId, userId), eq(images.albumId, albumId), eq(images.id, imageId)));
+  }
+  return true;
+}
+
+export async function updateAlbumImageCaptionForUser(
+  userId: string,
+  albumId: string,
+  imageId: string,
+  caption: string,
+): Promise<ImageEntry | undefined> {
+  const normalizedCaption = caption.trim();
+  const [row] = await db
     .update(images)
-    .set({ albumId })
-    .where(and(eq(images.userId, userId), inArray(images.id, imageIds)));
+    .set({ albumCaption: normalizedCaption.length > 0 ? normalizedCaption : null })
+    .where(
+      and(
+        eq(images.userId, userId),
+        eq(images.albumId, albumId),
+        eq(images.id, imageId),
+      ),
+    )
+    .returning();
+
+  if (!row) {
+    return undefined;
+  }
+  return mapImageRow(row);
 }
 
 export async function deleteImagesForUser(
@@ -330,18 +420,7 @@ export async function getImage(imageId: string): Promise<ImageEntry | undefined>
     return undefined;
   }
 
-  return {
-    id: row.id,
-    albumId: row.albumId ?? undefined,
-    baseName: row.baseName,
-    ext: row.ext,
-    width: row.width,
-    height: row.height,
-    sizeOriginal: row.sizeOriginal,
-    sizeSm: row.sizeSm,
-    sizeLg: row.sizeLg,
-    uploadedAt: row.uploadedAt.toISOString(),
-  };
+  return mapImageRow(row);
 }
 
 export async function getImageForUser(
@@ -358,18 +437,7 @@ export async function getImageForUser(
     return undefined;
   }
 
-  return {
-    id: row.id,
-    albumId: row.albumId ?? undefined,
-    baseName: row.baseName,
-    ext: row.ext,
-    width: row.width,
-    height: row.height,
-    sizeOriginal: row.sizeOriginal,
-    sizeSm: row.sizeSm,
-    sizeLg: row.sizeLg,
-    uploadedAt: row.uploadedAt.toISOString(),
-  };
+  return mapImageRow(row);
 }
 
 export async function updateImageMetadataForUser(
@@ -399,18 +467,7 @@ export async function updateImageMetadataForUser(
     return undefined;
   }
 
-  return {
-    id: row.id,
-    albumId: row.albumId ?? undefined,
-    baseName: row.baseName,
-    ext: row.ext,
-    width: row.width,
-    height: row.height,
-    sizeOriginal: row.sizeOriginal,
-    sizeSm: row.sizeSm,
-    sizeLg: row.sizeLg,
-    uploadedAt: row.uploadedAt.toISOString(),
-  };
+  return mapImageRow(row);
 }
 
 export async function createShare(

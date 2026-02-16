@@ -10,16 +10,22 @@ import { LightTimes } from '@energiz3r/icon-library/Icons/Light/LightTimes';
 import { LightDownload } from '@energiz3r/icon-library/Icons/Light/LightDownload';
 import { LightUndo } from '@energiz3r/icon-library/Icons/Light/LightUndo';
 import { LightRedo } from '@energiz3r/icon-library/Icons/Light/LightRedo';
+import { LightArrowAltUp } from '@energiz3r/icon-library/Icons/Light/LightArrowAltUp';
+import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArrowAltDown';
+
 import { SharePill } from "./share-pill";
 
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
+const INTERNAL_IMAGE_DRAG_TYPE = "application/x-tanglepic-image-id";
 
 type GalleryImage = {
   id: string;
   baseName: string;
   ext: string;
   albumId?: string;
+  albumCaption?: string;
+  albumOrder?: number;
   width: number;
   height: number;
   sizeOriginal?: number;
@@ -79,10 +85,17 @@ export default function GalleryClient({
   const [showAlbumImages, setShowAlbumImages] = useState(true);
   const [isRotating, setIsRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [albumEditError, setAlbumEditError] = useState<string | null>(null);
+  const [isSavingCaption, setIsSavingCaption] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [captionDraft, setCaptionDraft] = useState("");
+  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
+  const [dragOverImageId, setDragOverImageId] = useState<string | null>(null);
   const [imageVersionBumps, setImageVersionBumps] = useState<Record<string, number>>({});
   const dragCounter = useRef(0);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const inAlbumContext = Boolean(uploadAlbumId);
 
   useEffect(() => {
     setItems(images);
@@ -117,17 +130,49 @@ export default function GalleryClient({
   }, [showAlbumImages, showAlbumImageToggle]);
 
   useEffect(() => {
+    function isInternalImageDrag(event: DragEvent): boolean {
+      const types = event.dataTransfer?.types;
+      return Boolean(types && Array.from(types).includes(INTERNAL_IMAGE_DRAG_TYPE));
+    }
+
+    function isFileDrag(event: DragEvent): boolean {
+      const types = event.dataTransfer?.types;
+      return Boolean(
+        types &&
+          Array.from(types).includes("Files") &&
+          !Array.from(types).includes(INTERNAL_IMAGE_DRAG_TYPE),
+      );
+    }
+
     function handleDragEnter(event: DragEvent) {
+      if (isInternalImageDrag(event)) {
+        return;
+      }
+      if (!isFileDrag(event)) {
+        return;
+      }
       event.preventDefault();
       dragCounter.current += 1;
       setGlobalDragging(true);
     }
 
     function handleDragOver(event: DragEvent) {
+      if (isInternalImageDrag(event)) {
+        return;
+      }
+      if (!isFileDrag(event)) {
+        return;
+      }
       event.preventDefault();
     }
 
     function handleDragLeave(event: DragEvent) {
+      if (isInternalImageDrag(event)) {
+        return;
+      }
+      if (!isFileDrag(event)) {
+        return;
+      }
       event.preventDefault();
       dragCounter.current -= 1;
       if (dragCounter.current <= 0) {
@@ -136,6 +181,12 @@ export default function GalleryClient({
     }
 
     function handleDrop(event: DragEvent) {
+      if (isInternalImageDrag(event)) {
+        return;
+      }
+      if (!isFileDrag(event)) {
+        return;
+      }
       event.preventDefault();
       dragCounter.current = 0;
       setGlobalDragging(false);
@@ -236,9 +287,11 @@ export default function GalleryClient({
 
   async function openModal(image: GalleryImage) {
     setActive(image);
+    setCaptionDraft(image.albumCaption ?? "");
     setShare(null);
     setShareError(null);
     setRotateError(null);
+    setAlbumEditError(null);
     setHas640Variant(null);
     setIsChecking640(false);
 
@@ -270,9 +323,11 @@ export default function GalleryClient({
 
   function closeModal() {
     setActive(null);
+    setCaptionDraft("");
     setShare(null);
     setShareError(null);
     setRotateError(null);
+    setAlbumEditError(null);
     setHas640Variant(null);
     setIsChecking640(false);
   }
@@ -476,6 +531,127 @@ export default function GalleryClient({
     }
   }
 
+  async function persistAlbumOrder(nextItems: GalleryImage[]) {
+    if (!uploadAlbumId) {
+      return;
+    }
+    const imageIds = nextItems.map((item) => item.id);
+    const response = await fetch(`/api/albums/${uploadAlbumId}/images/order`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageIds }),
+    });
+    if (!response.ok) {
+      const payload = (await response.json()) as { error?: string };
+      throw new Error(payload.error ?? "Unable to reorder images.");
+    }
+  }
+
+  async function moveActiveImage(delta: -1 | 1) {
+    if (!active || !inAlbumContext || isSavingOrder) {
+      return;
+    }
+    const index = items.findIndex((item) => item.id === active.id);
+    if (index < 0) {
+      return;
+    }
+    const targetIndex = index + delta;
+    if (targetIndex < 0 || targetIndex >= items.length) {
+      return;
+    }
+
+    setAlbumEditError(null);
+    setIsSavingOrder(true);
+    const previousItems = items;
+    const nextItems = items.slice();
+    const [moved] = nextItems.splice(index, 1);
+    nextItems.splice(targetIndex, 0, moved);
+    setItems(nextItems);
+    try {
+      await persistAlbumOrder(nextItems);
+    } catch (error) {
+      setItems(previousItems);
+      setAlbumEditError(error instanceof Error ? error.message : "Unable to reorder image.");
+    } finally {
+      setIsSavingOrder(false);
+    }
+  }
+
+  async function moveImageByDrag(targetImageId: string) {
+    if (!uploadAlbumId || !draggedImageId || draggedImageId === targetImageId || isSavingOrder) {
+      return;
+    }
+    const fromIndex = items.findIndex((item) => item.id === draggedImageId);
+    const targetIndex = items.findIndex((item) => item.id === targetImageId);
+    if (fromIndex < 0 || targetIndex < 0) {
+      return;
+    }
+
+    setAlbumEditError(null);
+    setIsSavingOrder(true);
+    const previousItems = items;
+    const nextItems = items.slice();
+    const [moved] = nextItems.splice(fromIndex, 1);
+    nextItems.splice(targetIndex, 0, moved);
+    setItems(nextItems);
+    try {
+      await persistAlbumOrder(nextItems);
+    } catch (error) {
+      setItems(previousItems);
+      setAlbumEditError(error instanceof Error ? error.message : "Unable to reorder image.");
+    } finally {
+      setIsSavingOrder(false);
+      setDraggedImageId(null);
+      setDragOverImageId(null);
+    }
+  }
+
+  async function saveAlbumCaption() {
+    if (!active || !uploadAlbumId || isSavingCaption) {
+      return;
+    }
+    setAlbumEditError(null);
+    setIsSavingCaption(true);
+    try {
+      const response = await fetch(`/api/albums/${uploadAlbumId}/images/${active.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ caption: captionDraft }),
+      });
+      const payload = (await response.json()) as {
+        error?: string;
+        image?: { albumCaption?: string };
+      };
+      if (!response.ok || !payload.image) {
+        throw new Error(payload.error ?? "Unable to save caption.");
+      }
+      const nextCaption = payload.image.albumCaption ?? "";
+      setCaptionDraft(nextCaption);
+      setItems((current) =>
+        current.map((item) =>
+          item.id === active.id
+            ? {
+                ...item,
+                albumCaption: payload.image?.albumCaption,
+              }
+            : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === active.id
+          ? {
+              ...current,
+              albumCaption: payload.image?.albumCaption,
+            }
+          : current,
+      );
+    } catch (error) {
+      setAlbumEditError(error instanceof Error ? error.message : "Unable to save caption.");
+    } finally {
+      setIsSavingCaption(false);
+    }
+  }
+
   async function fetchAlbums() {
     const response = await fetch("/api/albums");
     if (!response.ok) {
@@ -603,6 +779,16 @@ export default function GalleryClient({
         openNextImage();
         return;
       }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        void moveActiveImage(-1);
+        return;
+      }
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        void moveActiveImage(1);
+        return;
+      }
       if (event.key === "Escape") {
         event.preventDefault();
         closeModal();
@@ -694,7 +880,46 @@ export default function GalleryClient({
           {displayItems.map((image) => (
             <div
               key={image.id}
-              className="gallery-tile relative overflow-hidden rounded-md border border-neutral-200 text-left"
+              draggable={inAlbumContext}
+              onDragStart={(event) => {
+                if (!inAlbumContext) {
+                  return;
+                }
+                setAlbumEditError(null);
+                setDraggedImageId(image.id);
+                event.dataTransfer.effectAllowed = "move";
+                event.dataTransfer.setData(INTERNAL_IMAGE_DRAG_TYPE, image.id);
+                event.dataTransfer.setData("text/plain", image.id);
+              }}
+              onDragOver={(event) => {
+                if (!inAlbumContext || !draggedImageId || draggedImageId === image.id) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "move";
+                setDragOverImageId(image.id);
+              }}
+              onDragLeave={() => {
+                if (dragOverImageId === image.id) {
+                  setDragOverImageId(null);
+                }
+              }}
+              onDrop={(event) => {
+                if (!inAlbumContext) {
+                  return;
+                }
+                event.preventDefault();
+                void moveImageByDrag(image.id);
+              }}
+              onDragEnd={() => {
+                setDraggedImageId(null);
+                setDragOverImageId(null);
+              }}
+              className={`gallery-tile relative overflow-hidden rounded-md border text-left ${
+                dragOverImageId === image.id
+                  ? "border-black ring-2 ring-black/20"
+                  : "border-neutral-200"
+              } ${draggedImageId === image.id ? "opacity-70" : ""}`}
             >
               <SharePill isShared={image.shared} absolutePosition />
               <FancyCheckbox
@@ -730,6 +955,8 @@ export default function GalleryClient({
                   alt="Uploaded"
                   className="h-48 w-full object-cover"
                   loading="lazy"
+                  draggable={false}
+                  onDragStart={(event) => event.preventDefault()}
                 />
               </button>
               <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
@@ -738,6 +965,9 @@ export default function GalleryClient({
                   {image.width}×{image.height}
                 </span>
               </div>
+              {inAlbumContext && image.albumCaption ? (
+                <p className="px-3 pb-3 text-xs text-neutral-600">{image.albumCaption}</p>
+              ) : null}
             </div>
           ))}
         </div>
@@ -752,6 +982,14 @@ export default function GalleryClient({
           if (event.key === "ArrowRight") {
             event.preventDefault();
             openNextImage();
+          }
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+            void moveActiveImage(-1);
+          }
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+            void moveActiveImage(1);
           }
           if (event.key === "Escape") {
             event.preventDefault();
@@ -786,6 +1024,28 @@ export default function GalleryClient({
                 >
                   <LightCaretRight className="h-4 w-4" fill="currentColor" />
                 </button>
+                {inAlbumContext ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void moveActiveImage(-1)}
+                      disabled={!hasPrevious || isSavingOrder}
+                      className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
+                      title="Move earlier in album"
+                    >
+                      <LightArrowAltUp className="h-4 w-4" fill="currentColor" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void moveActiveImage(1)}
+                      disabled={!hasNext || isSavingOrder}
+                      className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
+                      title="Move later in album"
+                    >
+                      <LightArrowAltDown className="h-4 w-4" fill="currentColor" />
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void rotateImage("left")}
@@ -874,6 +1134,31 @@ export default function GalleryClient({
 
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
                 {rotateError ? <p className="text-xs text-red-600">{rotateError}</p> : null}
+                {albumEditError ? <p className="text-xs text-red-600">{albumEditError}</p> : null}
+
+                {inAlbumContext ? (
+                  <div className="space-y-2 rounded border border-neutral-200 p-3">
+                    <label className="text-xs font-medium text-neutral-600">Caption (album only)</label>
+                    <textarea
+                      value={captionDraft}
+                      onChange={(event) => setCaptionDraft(event.target.value)}
+                      className="min-h-20 w-full rounded border border-neutral-200 px-3 py-2 text-xs"
+                      maxLength={1000}
+                      placeholder="Add a caption for this image in this album."
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-neutral-500">{captionDraft.length} / 1000</span>
+                      <button
+                        type="button"
+                        onClick={() => void saveAlbumCaption()}
+                        disabled={isSavingCaption}
+                        className="rounded border border-neutral-200 px-3 py-1 text-xs disabled:opacity-50"
+                      >
+                        {isSavingCaption ? "Saving..." : "Save caption"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {share ? (
                   <div className="space-y-3">
