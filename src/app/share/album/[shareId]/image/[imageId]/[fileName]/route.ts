@@ -33,6 +33,14 @@ function parseFileName(fileName: string): {
   return { baseName: match[1], size, ext: match[3].toLowerCase() };
 }
 
+function publicCacheHeaders(ext: string): Headers {
+  return new Headers({
+    "Content-Type": contentTypeForExt(ext),
+    "Cache-Control": "public, max-age=31536000, immutable",
+    Vary: "Accept-Encoding",
+  });
+}
+
 export async function GET(
   _request: NextRequest,
   {
@@ -67,13 +75,7 @@ export async function GET(
       new Date(image.uploadedAt),
     );
     return new Response(new Uint8Array(data), {
-      headers: {
-        "Content-Type": contentTypeForExt(image.ext),
-        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-        Vary: "Cookie, Authorization",
-      },
+      headers: publicCacheHeaders(image.ext),
     });
   } catch {
     return unavailableImageResponse(parsed?.ext ?? "png");

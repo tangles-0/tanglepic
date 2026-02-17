@@ -23,6 +23,29 @@ _Also for videos and other files (later)_
 
 `docker compose up -d`
 
+## AWS Infrastructure and Deploy
+
+- CDK app: `infra/cdk`
+- Dev deploy:
+  - `pnpm infra:cdk:install`
+  - `aws sts get-caller-identity` (or set `AWS_PROFILE=latex-admin`)
+  - `pnpm infra:cdk:bootstrap:dev`
+  - `pnpm infra:cdk:deploy:dev`
+  - `pnpm infra:db:push:dev` (run schema push in one-off ECS task)
+- Prod deploy:
+  - `pnpm infra:cdk:bootstrap:prod`
+  - `pnpm infra:cdk:deploy:prod`
+  - `pnpm infra:db:push:prod`
+
+## Ops Docs
+
+- Runtime env contract: `docs/runtime-environment.md`
+- Source-host migration runbook: `docs/migration-source-host-runbook.md`
+- Production cutover checklist: `docs/cutover-checklist.md`
+- Local dev after AWS rollout: `docs/local-development-after-aws.md`
+- Security review checklist: `docs/security-review-checklist.md`
+- GitHub Actions CD/CD: `docs/cicd-github-actions.md`
+
 ## Features
 
 - user accounts & user groups

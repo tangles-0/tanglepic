@@ -54,6 +54,14 @@ function getInternalAppOrigin(): string {
   return `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
 }
 
+function publicCacheHeaders(ext: string): Headers {
+  return new Headers({
+    "Content-Type": contentTypeForExt(ext),
+    "Cache-Control": "public, max-age=31536000, immutable",
+    Vary: "Accept-Encoding",
+  });
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ fileName: string }> },
@@ -103,15 +111,7 @@ export async function GET(
       parsed.size,
       new Date(image.uploadedAt),
     );
-    return withPublicImageCors(new Response(new Uint8Array(data), {
-      headers: {
-        "Content-Type": contentTypeForExt(image.ext),
-        "Cache-Control": "private, no-store, max-age=0, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-        Vary: "Cookie, Authorization",
-      },
-    }));
+    return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(image.ext) }));
   } catch {
     if (!parsed) {
       return withPublicImageCors(new Response("Service temporarily unavailable.", { status: 503 }));

@@ -49,5 +49,10 @@ certificates
 /data/
 docker-compose.override.yml
 /deployment/node_modules
+/infra/cdk/node_modules/
+/infra/cdk/cdk.out/
+/infra/cdk/dist/
+/migration-artifacts/
+/scripts/migration/migration-artifacts/
 
 latex-config.md

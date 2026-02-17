@@ -1,0 +1,96 @@
+name: Deploy Dev
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  APP_ENV: dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Resolve account and image metadata
+        id: meta
+        run: |
+          ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+          IMAGE_REPO="latex-${APP_ENV}-app"
+          IMAGE_TAG="${GITHUB_SHA}"
+          IMAGE_URI="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${IMAGE_REPO}:${IMAGE_TAG}"
+          echo "account_id=${ACCOUNT_ID}" >> "$GITHUB_OUTPUT"
+          echo "image_repo=${IMAGE_REPO}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+      - name: Ensure ECR repository exists
+        run: |
+          aws ecr describe-repositories --repository-names "${{ steps.meta.outputs.image_repo }}" >/dev/null 2>&1 || \
+          aws ecr create-repository --repository-name "${{ steps.meta.outputs.image_repo }}"
+
+      - name: ECR login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        run: |
+          docker build -t "${{ steps.meta.outputs.image_uri }}" .
+          docker push "${{ steps.meta.outputs.image_uri }}"
+
+      - name: Install CDK dependencies
+        run: pnpm infra:cdk:install
+
+      - name: Deploy CDK stacks (dev)
+        run: pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}
+
+      - name: Run one-off DB migration task
+        run: |
+          CLUSTER="latex-dev-cluster"
+          TASK_DEF="$(aws ecs list-task-definitions --family-prefix latex-dev-task --sort DESC --max-items 1 --query 'taskDefinitionArns[0]' --output text || true)"
+          if [ -z "$TASK_DEF" ] || [ "$TASK_DEF" = "None" ]; then
+            echo "Could not resolve task definition for one-off migration"
+            exit 1
+          fi
+          SUBNETS="$(aws ec2 describe-subnets --filters Name=tag:aws-cdk:subnet-name,Values=private-egress Name=vpc-id,Values=$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=latex-dev-vpc --query 'Vpcs[0].VpcId' --output text) --query 'Subnets[].SubnetId' --output text)"
+          SG_ID="$(aws ec2 describe-security-groups --filters Name=group-name,Values=latex-dev-app-sg --query 'SecurityGroups[0].GroupId' --output text)"
+          aws ecs run-task \
+            --cluster "$CLUSTER" \
+            --launch-type FARGATE \
+            --task-definition "$TASK_DEF" \
+            --network-configuration "awsvpcConfiguration={subnets=[$(echo "$SUBNETS" | sed 's/ /,/g')],securityGroups=[$SG_ID],assignPublicIp=DISABLED}" \
+            --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["pnpm","db:migrate:ci"]}]}'
+
