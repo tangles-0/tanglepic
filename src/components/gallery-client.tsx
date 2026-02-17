@@ -876,7 +876,7 @@ export default function GalleryClient({
             : "No images to show with the current filter."}
         </div>
       ) : (
-        <div className="grid justify-center gap-4 [grid-template-columns:repeat(auto-fit,minmax(240px,320px))]">
+        <div className="grid justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,320px))] [grid-template-columns:repeat(auto-fit,minmax(240px,100%))]">
           {displayItems.map((image) => (
             <div
               key={image.id}
@@ -923,7 +923,7 @@ export default function GalleryClient({
             >
               <SharePill isShared={image.shared} absolutePosition />
               <FancyCheckbox
-                className="tile-control absolute left-2 top-2 z-10 text-xs"
+                className="tile-control absolute left-1 top-1 z-10 text-xs"
                 checked={selected.has(image.id)}
                 onChange={(checked) => {
                   const next = new Set(selected);
@@ -938,7 +938,7 @@ export default function GalleryClient({
               <button
                 type="button"
                 onClick={() => setImageToDelete(image)}
-                className="tile-control absolute right-2 top-2 z-10 rounded p-1"
+                className="tile-control absolute right-1 top-1 z-10 rounded p-1"
                 aria-label="Delete image"
                 title="Delete image"
               >
@@ -953,7 +953,7 @@ export default function GalleryClient({
                 <img
                   src={image.thumbUrl}
                   alt="Uploaded"
-                  className="h-48 w-full object-cover"
+                  className="sm:h-48 max-h-64 w-full object-cover mt-2"
                   loading="lazy"
                   draggable={false}
                   onDragStart={(event) => event.preventDefault()}

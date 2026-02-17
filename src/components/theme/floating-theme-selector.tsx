@@ -32,7 +32,7 @@ export default function FloatingThemeSelector() {
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="floating-theme-button flex h-12 w-12 items-center justify-center rounded-full border shadow-lg transition hover:shadow-xl"
+        className="floating-theme-button flex h-8 sm:h-12 w-8 sm:w-12 items-center justify-center rounded-full border shadow-lg transition hover:shadow-xl"
         aria-label="Select theme"
         aria-expanded={isOpen}
       >

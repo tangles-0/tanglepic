@@ -33,7 +33,7 @@ export default function PageHeader({
         {subtitle ? <p className="text-neutral-600">{subtitle}</p> : null}
         {children}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-3 pt-8">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-3 sm:pt-8">{actions}</div> : null}
     </header>
   );
 }

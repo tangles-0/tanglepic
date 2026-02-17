@@ -32,7 +32,7 @@ export default async function Home() {
   const latestPatchNote = await getLatestPatchNote();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 px-6 py-10 text-sm">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 px-6 py-2 sm:py-10 text-sm">
       <header className="space-y-2">
         <div className="relative">
           <h1 className="text-2xl font-semibold mt-1">latex <span className="font-medium text-neutral-500">img_srv</span></h1>
@@ -51,25 +51,19 @@ export default async function Home() {
       </section> */}
 
       <section className="rounded-md border border-neutral-200 p-4 text-sm relative">
-        <div className="flex items-center gap-3">
-          <h2 className="text-lg font-medium">latest update</h2>
-          <TextLink href="/patch-notes" className="text-xs">
-            view all
-          </TextLink>
-        </div>
-        {latestPatchNote ? (
-          <div className="mt-0 space-y-2">
-            <p className="text-xs text-neutral-500">
-              {new Date(latestPatchNote.publishedAt).toLocaleString()}
-            </p>
-            <div className="text-sm">
-              <PatchNoteMarkdown content={latestPatchNote.content} />
-            </div>
+      <div className="sm:absolute relative top-0 right-0 flex">
+          <div className="flex items-center gap-2">
+            {latestPatchNote ? (
+              <p className="text-xs text-neutral-500">
+                {new Date(latestPatchNote.publishedAt).toLocaleString()}
+              </p>
+            ) : null}
+            |
+            <TextLink href="/patch-notes" className="text-xs">
+              view all
+            </TextLink>
+            |
           </div>
-        ) : (
-          <p className="mt-2 text-xs text-neutral-500">No patch notes published yet.</p>
-        )}
-        <div className="absolute top-0 right-0">
           <Link
             href="https://github.com/tangles-0/tanglepic"
             target="_blank"
@@ -79,6 +73,16 @@ export default async function Home() {
             <BrandsGithub className="p-2 h-10 w-10" fill="currentColor" />
           </Link>
         </div>
+        <h2 className="text-lg font-medium">latest update</h2>
+        {latestPatchNote ? (
+          <div className="mt-0 space-y-2">
+            <div className="text-sm">
+              <PatchNoteMarkdown content={latestPatchNote.content} />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-neutral-500">No patch notes published yet.</p>
+        )}
       </section>
 
       {userId ? (
