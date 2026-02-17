@@ -32,7 +32,7 @@ export default async function Home() {
   const latestPatchNote = await getLatestPatchNote();
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-10 text-sm">
+    <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 px-6 py-10 text-sm">
       <header className="space-y-2">
         {/* <div className="flex items-center gap-2">
           <img src="/latex-logo.png" alt="TanglePic"  width="24px" />
@@ -44,7 +44,7 @@ export default async function Home() {
         </p>
       </header>
 
-      <section className="rounded-md border border-neutral-200 p-4 text-sm relative">
+      <section className="rounded-md border border-neutral-200 px-4 py-2 text-sm relative">
         <h2 className="text-lg font-medium">motd</h2>
         <p className="mt-2 text-xs text-neutral-600">{settings.motd}</p>
         <div className="absolute top-0 right-0">
@@ -82,10 +82,11 @@ export default async function Home() {
 
       {userId ? (
         <section className="space-y-2 rounded-md border border-neutral-200 p-4 text-sm">
-          <h2 className="text-lg font-medium">I C U AGAIN</h2>
-          <p className="text-xs text-neutral-600">
+          {/* <h2 className="text-lg font-medium">I C U AGAIN</h2> 
+          <p className="text-lg text-neutral-600">*/}
+          <h2 className="text-lg font-medium">
             u r <span className="font-bold">{session?.user?.email ?? session?.user?.name ?? "user"}</span>. wb &lt;3
-          </p>
+          </h2>
           <p className="text-xs text-neutral-600">
             u hav {userStats?.imageCount ?? 0} imgs uploaded using{" "}
             {formatBytes(userStats?.totalBytes ?? 0)} of spinning rust
@@ -153,7 +154,7 @@ export default async function Home() {
       <section className="space-y-2 rounded-md border border-neutral-200 p-4">
         <h2 className="text-lg font-medium"><span className="text-emerald-500 animate-pulse">pro tip:</span> thumbnail links</h2>
         <p className="text-xs text-neutral-600">
-          creat a share link, then append <code>-sm</code> or <code>-lg</code> before the file
+          create a share link, then append <code>-sm</code> or <code>-lg</code> before the file
           extension for thumbnails.
         </p>
         <p className="text-neutral-500 text-xs">
