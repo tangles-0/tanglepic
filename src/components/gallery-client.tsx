@@ -15,6 +15,8 @@ import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArro
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 
 import { SharePill } from "./share-pill";
+import { DitherEditor } from "./dither-editor";
+import { DitherIcon } from "./icons/dither";
 
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
@@ -86,6 +88,8 @@ export default function GalleryClient({
   const [showAlbumImages, setShowAlbumImages] = useState(true);
   const [isRotating, setIsRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
+  const [isDitherOpen, setIsDitherOpen] = useState(false);
+  const [ditherError, setDitherError] = useState<string | null>(null);
   const [albumEditError, setAlbumEditError] = useState<string | null>(null);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -253,32 +257,28 @@ export default function GalleryClient({
   const activeDisplayItem = activeIndex >= 0 ? displayItems[activeIndex] : null;
   const canRotateActive = active ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
 
+  function pushMessage(text: string, tone: UploadMessage["tone"]) {
+    const entry: UploadMessage = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      tone,
+    };
+    setMessages((current) => [entry, ...current]);
+    window.setTimeout(() => {
+      setMessages((current) => current.filter((item) => item.id !== entry.id));
+    }, 4000);
+  }
+
   async function uploadFiles(files: FileList | File[]) {
     const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
     if (itemsToUpload.length === 0) {
-      const entry: UploadMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text: "Please drop image files.",
-        tone: "error",
-      };
-      setMessages((current) => [entry, ...current]);
-      window.setTimeout(() => {
-        setMessages((current) => current.filter((item) => item.id !== entry.id));
-      }, 4000);
+      pushMessage("Please drop image files.", "error");
       return;
     }
 
     for (const file of itemsToUpload) {
       const result = await uploadSingleImage(file, uploadAlbumId);
-      const entry: UploadMessage = {
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        text: result.message,
-        tone: result.ok ? "success" : "error",
-      };
-      setMessages((current) => [entry, ...current]);
-      window.setTimeout(() => {
-        setMessages((current) => current.filter((item) => item.id !== entry.id));
-      }, 4000);
+      pushMessage(result.message, result.ok ? "success" : "error");
 
       if (result.ok && result.image) {
         setItems((current) => [result.image as GalleryImage, ...current]);
@@ -288,6 +288,8 @@ export default function GalleryClient({
 
   async function openModal(image: GalleryImage) {
     setActive(image);
+    setIsDitherOpen(false);
+    setDitherError(null);
     setCaptionDraft(image.albumCaption ?? "");
     setShare(null);
     setShareError(null);
@@ -324,6 +326,8 @@ export default function GalleryClient({
 
   function closeModal() {
     setActive(null);
+    setIsDitherOpen(false);
+    setDitherError(null);
     setCaptionDraft("");
     setShare(null);
     setShareError(null);
@@ -530,6 +534,77 @@ export default function GalleryClient({
     } finally {
       setIsRotating(false);
     }
+  }
+
+  async function saveDitheredImage(blob: Blob, mode: "update" | "copy") {
+    if (!active) {
+      throw new Error("No active image selected.");
+    }
+    const formData = new FormData();
+    formData.append("mode", mode);
+    formData.append("imageId", active.id);
+    formData.append("file", new File([blob], `${active.baseName}.${active.ext}`, { type: blob.type }));
+
+    const response = await fetch("/api/images/dither", {
+      method: "POST",
+      body: formData,
+    });
+    const payload = (await response.json()) as {
+      error?: string;
+      image?: GalleryImage;
+    };
+    if (!response.ok || !payload.image) {
+      throw new Error(payload.error ?? "Unable to save dithered image.");
+    }
+    return payload.image;
+  }
+
+  async function handleDitherSave(blob: Blob) {
+    if (!active) {
+      return;
+    }
+    setDitherError(null);
+    const updatedImage = await saveDitheredImage(blob, "update");
+    setItems((current) =>
+      current.map((item) =>
+        item.id === updatedImage.id
+          ? {
+              ...item,
+              width: updatedImage.width,
+              height: updatedImage.height,
+              sizeOriginal: updatedImage.sizeOriginal,
+              sizeSm: updatedImage.sizeSm,
+              sizeLg: updatedImage.sizeLg,
+            }
+          : item,
+      ),
+    );
+    setActive((current) =>
+      current?.id === updatedImage.id
+        ? {
+            ...current,
+            width: updatedImage.width,
+            height: updatedImage.height,
+            sizeOriginal: updatedImage.sizeOriginal,
+            sizeSm: updatedImage.sizeSm,
+            sizeLg: updatedImage.sizeLg,
+          }
+        : current,
+    );
+    setImageVersionBumps((current) => ({
+      ...current,
+      [updatedImage.id]: Date.now(),
+    }));
+    setIsDitherOpen(false);
+    pushMessage("Saved dither changes.", "success");
+  }
+
+  async function handleDitherSaveCopy(blob: Blob) {
+    setDitherError(null);
+    const copiedImage = await saveDitheredImage(blob, "copy");
+    setItems((current) => [copiedImage, ...current]);
+    setIsDitherOpen(false);
+    pushMessage(copiedImage.albumId ? "Saved dither copy to album." : "Saved dither copy to gallery.", "success");
   }
 
   async function persistAlbumOrder(nextItems: GalleryImage[]) {
@@ -1073,6 +1148,19 @@ export default function GalleryClient({
                 <button
                   type="button"
                   onClick={() => {
+                    setDitherError(null);
+                    setIsDitherOpen((current) => !current);
+                  }}
+                  className={`rounded border px-2 py-1 text-xs ${
+                    isDitherOpen ? "border-black bg-black text-white" : "border-neutral-200"
+                  }`}
+                  title="Open dither controls"
+                >
+                  <DitherIcon className="h-4 w-4" fill="currentColor" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
                     const downloadUrl = `/image/${active.id}/${active.baseName}.${active.ext}`;
                     const link = document.createElement("a");
                     link.href = downloadUrl;
@@ -1098,11 +1186,43 @@ export default function GalleryClient({
             </div>
 
             <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[2fr,1fr]">
-              <img
-                src={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
-                alt="Uploaded"
-                className="sm:max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
-              />
+              <div className="space-y-3">
+                {isDitherOpen ? (
+                  <DitherEditor
+                    imageUrl={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
+                    imageName={active.baseName}
+                    outputExt={active.ext}
+                    onCancel={() => {
+                      setDitherError(null);
+                      setIsDitherOpen(false);
+                    }}
+                    onSave={async (blob) => {
+                      try {
+                        await handleDitherSave(blob);
+                      } catch (error) {
+                        setDitherError(error instanceof Error ? error.message : "Unable to save dithered image.");
+                        throw error;
+                      }
+                    }}
+                    onSaveCopy={async (blob) => {
+                      try {
+                        await handleDitherSaveCopy(blob);
+                      } catch (error) {
+                        setDitherError(
+                          error instanceof Error ? error.message : "Unable to save dithered image copy.",
+                        );
+                        throw error;
+                      }
+                    }}
+                  />
+                ) : (
+                  <img
+                    src={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
+                    alt="Uploaded"
+                    className="sm:max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
+                  />
+                )}
+              </div>
 
               <div className="min-w-0 space-y-3">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded border border-neutral-200 p-3 text-xs text-neutral-600">
@@ -1130,6 +1250,7 @@ export default function GalleryClient({
 
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
                 {rotateError ? <p className="text-xs text-red-600">{rotateError}</p> : null}
+                {ditherError ? <p className="text-xs text-red-600">{ditherError}</p> : null}
                 {albumEditError ? <p className="text-xs text-red-600">{albumEditError}</p> : null}
 
                 {inAlbumContext ? (

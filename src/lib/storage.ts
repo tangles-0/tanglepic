@@ -211,6 +211,57 @@ export async function rotateImageFiles(
   };
 }
 
+export async function overwriteImageAndThumbnails(
+  buffer: Buffer,
+  baseName: string,
+  ext: string,
+  uploadedAt: Date,
+): Promise<{
+  width: number;
+  height: number;
+  sizeOriginal: number;
+  sizeSm: number;
+  sizeLg: number;
+}> {
+  const outputFormat = outputFormatFromExt(ext.toLowerCase());
+  const image = sharp(buffer).rotate();
+  const metadata = await image.metadata();
+  const width = metadata.width ?? 0;
+  const height = metadata.height ?? 0;
+
+  const originalBuffer = await encodeOutput(image.clone(), outputFormat, 85);
+  const smBuffer = await encodeOutput(
+    image.clone().resize({ width: THUMBNAIL_SIZES.sm, withoutEnlargement: true }),
+    outputFormat,
+    80,
+  );
+  const lgBuffer = await encodeOutput(
+    image.clone().resize({ width: THUMBNAIL_SIZES.lg, withoutEnlargement: true }),
+    outputFormat,
+    82,
+  );
+
+  await Promise.all([
+    writeStoredBuffer(baseName, ext, "original", uploadedAt, originalBuffer),
+    writeStoredBuffer(baseName, ext, "sm", uploadedAt, smBuffer),
+    writeStoredBuffer(baseName, ext, "lg", uploadedAt, lgBuffer),
+  ]);
+
+  const x640Exists = await hasImageVariant(baseName, ext, "x640", uploadedAt);
+  if (x640Exists) {
+    const resized640 = await generate640Buffer(originalBuffer, ext);
+    await writeStoredBuffer(baseName, ext, "x640", uploadedAt, resized640);
+  }
+
+  return {
+    width,
+    height,
+    sizeOriginal: originalBuffer.length,
+    sizeSm: smBuffer.length,
+    sizeLg: lgBuffer.length,
+  };
+}
+
 type OutputFormat = {
   ext: string;
   format: "jpeg" | "png" | "webp" | "gif";
