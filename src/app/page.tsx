@@ -34,40 +34,31 @@ export default async function Home() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 px-6 py-10 text-sm">
       <header className="space-y-2">
-        {/* <div className="flex items-center gap-2">
-          <img src="/latex-logo.png" alt="TanglePic"  width="24px" />
-        
-        </div> */}
-        <h1 className="text-2xl font-semibold">LaTeX <span className="font-medium">img_srv</span></h1>
+        <div className="relative">
+          <h1 className="text-2xl font-semibold mt-1">latex <span className="font-medium text-neutral-500">img_srv</span></h1>
+          <div className="absolute top-[-15px] left-[-22px]">
+            <img src="/latex-logo.png" alt="TanglePic" width="32px" className="latex-logo z-5" />
+          </div>
+        </div>
         <p className="text-neutral-600">
           create acct to upload imgs, mkdir albums, and create symlinks to send to frendz/foez
         </p>
       </header>
 
-      <section className="rounded-md border border-neutral-200 px-4 py-2 text-sm relative">
+      {/* <section className="rounded-md border border-neutral-200 px-4 py-2 text-sm relative">
         <h2 className="text-lg font-medium">motd</h2>
         <p className="mt-2 text-xs text-neutral-600">{settings.motd}</p>
-        <div className="absolute top-0 right-0">
-          <Link
-            href="https://github.com/tangles-0/tanglepic"
-            target="_blank"
-            rel="noopener noreferrer"
+      </section> */}
 
-          >
-            <BrandsGithub className="p-2 h-10 w-10" fill="currentColor" />
-          </Link>
-        </div>
-      </section>
-
-      <section className="rounded-md border border-neutral-200 p-4 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-medium">latest patch note</h2>
+      <section className="rounded-md border border-neutral-200 p-4 text-sm relative">
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-medium">latest update</h2>
           <TextLink href="/patch-notes" className="text-xs">
             view all
           </TextLink>
         </div>
         {latestPatchNote ? (
-          <div className="mt-3 space-y-2">
+          <div className="mt-0 space-y-2">
             <p className="text-xs text-neutral-500">
               {new Date(latestPatchNote.publishedAt).toLocaleString()}
             </p>
@@ -78,6 +69,16 @@ export default async function Home() {
         ) : (
           <p className="mt-2 text-xs text-neutral-500">No patch notes published yet.</p>
         )}
+        <div className="absolute top-0 right-0">
+          <Link
+            href="https://github.com/tangles-0/tanglepic"
+            target="_blank"
+            rel="noopener noreferrer"
+
+          >
+            <BrandsGithub className="p-2 h-10 w-10" fill="currentColor" />
+          </Link>
+        </div>
       </section>
 
       {userId ? (
