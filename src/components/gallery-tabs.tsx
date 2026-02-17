@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import GalleryClient from "@/components/gallery-client";
 import { LightPencil } from '@energiz3r/icon-library/Icons/Light/LightPencil';
+import { LightTrashAlt } from "@energiz3r/icon-library/Icons/Light/LightTrashAlt";
 
 const HIDE_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-hide-album-images";
 
@@ -270,12 +271,7 @@ export default function GalleryTabs({
                     aria-label="delete album"
                     title="rm -rf this album"
                   >
-                    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-                      <path
-                        d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 11h12a2 2 0 0 0 2-2V7H4v11a2 2 0 0 0 2 2Z"
-                        fill="currentColor"
-                      />
-                    </svg>
+                    <LightTrashAlt className="h-4 w-4" fill="currentColor" />
                   </button>
                 </div>
               ))}

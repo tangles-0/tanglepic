@@ -12,6 +12,7 @@ import { LightUndo } from '@energiz3r/icon-library/Icons/Light/LightUndo';
 import { LightRedo } from '@energiz3r/icon-library/Icons/Light/LightRedo';
 import { LightArrowAltUp } from '@energiz3r/icon-library/Icons/Light/LightArrowAltUp';
 import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArrowAltDown';
+import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 
 import { SharePill } from "./share-pill";
 
@@ -942,12 +943,7 @@ export default function GalleryClient({
                 aria-label="Delete image"
                 title="Delete image"
               >
-                <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
-                  <path
-                    d="M9 3h6l1 2h4v2H4V5h4l1-2Zm1 6h2v9h-2V9Zm4 0h2v9h-2V9ZM7 9h2v9H7V9Zm-1 11h12a2 2 0 0 0 2-2V7H4v11a2 2 0 0 0 2 2Z"
-                    fill="currentColor"
-                  />
-                </svg>
+                <LightTrashAlt className="h-4 w-4" fill="currentColor" />
               </button>
               <button type="button" onClick={() => openModal(image)} className="block w-full">
                 <img
@@ -974,7 +970,7 @@ export default function GalleryClient({
       )}
 
       {active ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6" onKeyDown={(event) => {
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 sm:px-4 sm:py-6" onKeyDown={(event) => {
           if (event.key === "ArrowLeft") {
             event.preventDefault();
             openPreviousImage();
@@ -996,8 +992,8 @@ export default function GalleryClient({
             closeModal();
           }
         }}>
-          <div className="max-h-full w-full max-w-3xl overflow-y-auto overflow-x-hidden rounded-md bg-white p-6 text-sm">
-            <div className="flex items-start justify-between gap-4">
+          <div className="max-h-full w-full max-w-3xl overflow-y-auto overflow-x-hidden sm:rounded-md bg-white p-2 sm:p-6 text-sm">
+            <div className="flex sm:flex-row flex-col items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">img details</h2>
                 <p className="text-xs text-neutral-500">{active.baseName}</p>
@@ -1007,7 +1003,7 @@ export default function GalleryClient({
                   </p>
                 ) : null}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="w-full sm:w-auto flex items-center justify-center gap-2">
                 <button
                   type="button"
                   onClick={openPreviousImage}
@@ -1105,7 +1101,7 @@ export default function GalleryClient({
               <img
                 src={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
                 alt="Uploaded"
-                className="max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
+                className="sm:max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
               />
 
               <div className="min-w-0 space-y-3">

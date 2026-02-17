@@ -75,10 +75,10 @@ export default function AlbumShareControls({ albumId }: { albumId: string }) {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-col gap-6 rounded border border-neutral-200 px-4 py-3">
+      <div className="flex flex-col gap-2 rounded border border-neutral-200 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3  text-xs">
 
-          <span className="text-neutral-600">sharing: {shareEnabled ? "enabled" : "disabled"}</span>
+          <span className="text-neutral-600">sharing:</span>
           {shareEnabled ? (
             <span className="rounded bg-emerald-600 px-2 py-1 font-medium text-white">
               album shared
@@ -100,7 +100,7 @@ export default function AlbumShareControls({ albumId }: { albumId: string }) {
         {shareEnabled && shareUrl ? (
           <div className="text-xs">
             <div className="flex flex-wrap items-center justify-between gap-3" onClick={() => void copyLink()}>
-              <div>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <span className="text-neutral-600">album link: </span>
                 <span className="break-all text-xs font-bold">
                   {origin}

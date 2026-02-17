@@ -39,7 +39,7 @@ export default async function AlbumPage({
     (!dismissedAt || new Date(latestPatchNote.publishedAt).getTime() > new Date(dismissedAt).getTime());
 
   return (
-    <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
+    <main className="flex min-h-screen w-full flex-col gap-6 px-2 sm:px-6 py-2 sm:py-10 text-sm">
       <PageHeader
         title={album.name}
         subtitle={`${images.length} image${images.length === 1 ? "" : "s"} in this album.`}

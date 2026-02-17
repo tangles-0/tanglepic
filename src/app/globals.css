@@ -328,25 +328,30 @@ html {
   0% {
     box-shadow: var(--theme-glow);
   }
+
   50% {
     box-shadow:
       0 0 18px color-mix(in srgb, var(--theme-button-border) 55%, transparent),
       var(--theme-glow);
   }
+
   100% {
     box-shadow: var(--theme-glow);
   }
 }
 
 @keyframes neon-flicker {
+
   0%,
   100% {
     text-shadow: var(--theme-heading-glow);
     opacity: 1;
   }
+
   45% {
     opacity: 0.85;
   }
+
   60% {
     opacity: 0.95;
   }
@@ -356,6 +361,7 @@ html {
   0% {
     background-position: 0 0, 0 0, 0 0;
   }
+
   100% {
     background-position: 0 24px, 0 0, 0 0;
   }
@@ -365,25 +371,31 @@ html {
   0% {
     background-position: 0 0;
   }
+
   100% {
     background-position: 0 3px;
   }
 }
 
 @keyframes crt-flicker {
+
   0%,
   100% {
     opacity: 0.4;
   }
+
   10% {
     opacity: 0.41;
   }
+
   35% {
     opacity: 0.48;
   }
+
   55% {
     opacity: 0.46;
   }
+
   80% {
     opacity: 0.41;
   }
@@ -397,6 +409,7 @@ html {
       75% 10%,
       center;
   }
+
   50% {
     background-position:
       45% 30%,
@@ -404,6 +417,7 @@ html {
       20% 80%,
       center;
   }
+
   100% {
     background-position:
       100% 100%,
@@ -422,13 +436,11 @@ body {
 [data-theme="neon-green"] body {
   position: relative;
   background-image:
-    repeating-linear-gradient(
-      to bottom,
+    repeating-linear-gradient(to bottom,
       rgba(255, 255, 255, 0.04) 0px,
       rgba(255, 255, 255, 0.04) 1px,
       rgba(0, 0, 0, 0) 2rem,
-      rgba(0, 0, 0, 0) 4px
-    ),
+      rgba(0, 0, 0, 0) 4px),
     radial-gradient(circle at center, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.25) 75%, rgba(0, 0, 0, 0.5) 100%),
     radial-gradient(circle, rgba(255, 255, 255, 0.025) 0.5px, rgba(0, 0, 0, 0) 1.5px);
   background-size: 100% 6px, 100% 100%, 3px 3px;
@@ -464,6 +476,7 @@ body {
     1px 1px rgba(255, 0, 255, 0.28),
     -1px -1px rgba(0, 255, 255, 0.24);
 }
+
 [data-theme="crt"] body::before,
 [data-theme="crt"] body::after {
   content: "";
@@ -477,23 +490,20 @@ body {
   top: 0;
   z-index: 1;
 }
+
 [data-theme="crt"] body::before {
-  background: repeating-linear-gradient(
-    rgb(218, 49, 49) 0px,
-    rgb(112, 159, 115) 2px,
-    rgb(40, 129, 206) 4px
-  );
+  background: repeating-linear-gradient(rgb(218, 49, 49) 0px,
+      rgb(112, 159, 115) 2px,
+      rgb(40, 129, 206) 4px);
   opacity: 0.1;
   animation: crt-overlay-shift 130ms linear infinite;
 }
 
 [data-theme="crt"] body::after {
-  background: repeating-linear-gradient(
-    90deg,
-    rgb(218, 49, 49) 2px,
-    rgb(112, 159, 115) 4px,
-    rgb(40, 129, 206) 6px
-  );
+  background: repeating-linear-gradient(90deg,
+      rgb(218, 49, 49) 2px,
+      rgb(112, 159, 115) 4px,
+      rgb(40, 129, 206) 6px);
   opacity: 1;
   animation: crt-flicker 190ms steps(2, end) infinite;
 }
@@ -583,6 +593,7 @@ body {
 [data-theme="neon-green"] h4 {
   font-family: "Tilt Neon", "Times New Roman", Georgia, "Palatino Linotype", serif;
 }
+
 [data-theme="neon-green"] body {
   font-family: "Nova Mono", "Times New Roman", Georgia, "Palatino Linotype", serif;
   letter-spacing: 0.01em;
@@ -631,6 +642,7 @@ body {
 [data-theme] a {
   color: var(--theme-link);
 }
+
 [data-theme="crt"] a {
   color: #ff9bdd;
 }
@@ -645,6 +657,11 @@ body {
 
 [data-theme] button {
   color: var(--theme-text);
+}
+
+/* enabled buttons only */
+[data-theme] button:enabled {
+  cursor: pointer;
 }
 
 [data-theme] button:focus,
@@ -727,17 +744,21 @@ body {
 [data-theme="depth"] .bg-emerald-600 {
   background-color: var(--theme-alert-success);
 }
+
 [data-theme="author"] .bg-emerald-600 {
   color: var(--theme-panel);
 }
+
 [data-theme="retro"] .bg-emerald-600 {
   background-color: var(--theme-text);
   color: var(--theme-panel);
 }
+
 [data-theme="cyber"] .bg-emerald-600 {
   background-color: var(--theme-alert-success);
   color: var(--theme-panel);
 }
+
 [data-theme="blood"] .bg-emerald-600 {
   background-color: var(--theme-text);
   color: var(--theme-panel);
@@ -809,7 +830,7 @@ body {
   flex-shrink: 0;
 }
 
-[data-theme] .checkbox-chip input:checked + .checkbox-box::after {
+[data-theme] .checkbox-chip input:checked+.checkbox-box::after {
   content: "";
   width: 0.5rem;
   height: 0.5rem;
@@ -817,7 +838,7 @@ body {
   background-color: var(--theme-checkbox-fill);
 }
 
-[data-theme] .checkbox-chip input:focus-visible + .checkbox-box {
+[data-theme] .checkbox-chip input:focus-visible+.checkbox-box {
   box-shadow: 0 0 0 2px var(--theme-focus);
 }
 
@@ -842,36 +863,43 @@ body {
   0% {
     background-position: 0 0, 0 0;
   }
+
   100% {
     background-position: 0 14px, 0 44px;
   }
 }
 
 @keyframes cyber-heading-thickline {
+
   0%,
   85%,
   100% {
     background-size: 100% 4px, 100% 68px;
   }
+
   86% {
     background-size: 100% 4px, 100% 22px;
   }
+
   88% {
     background-size: 100% 4px, 100% 14px;
   }
 }
 
 @keyframes cyber-heading-glitch {
+
   0%,
   92%,
   100% {
     transform: none;
     filter: none;
   }
+
   93% {
     transform: translateX(-1px) skewX(-0.6deg);
     filter: saturate(1.25);
   }
+
   94% {
     transform: translateX(1px) skewX(0.6deg);
   }
@@ -886,8 +914,7 @@ body {
   pointer-events: none;
   mix-blend-mode: screen;
   background-image:
-    linear-gradient(
-      180deg,
+    linear-gradient(180deg,
       transparent 0%,
       transparent 38%,
       rgba(255, 61, 240, 0.35) 38%,
@@ -896,15 +923,12 @@ body {
       transparent 66%,
       rgba(0, 229, 255, 0.35) 66%,
       rgba(0, 229, 255, 0.35) 72%,
-      transparent 72%
-    ),
-    repeating-linear-gradient(
-      0deg,
+      transparent 72%),
+    repeating-linear-gradient(0deg,
       rgba(0, 229, 255, 0.08) 0,
       rgba(0, 229, 255, 0.08) 1px,
       rgba(255, 61, 240, 0.08) 1px,
-      rgba(255, 61, 240, 0.08) 2px
-    );
+      rgba(255, 61, 240, 0.08) 2px);
 }
 
 [data-theme="cyber"] .gallery-tile img {
@@ -920,15 +944,12 @@ body {
   opacity: 0;
   mix-blend-mode: screen;
   background-image:
-    repeating-linear-gradient(
-      90deg,
+    repeating-linear-gradient(90deg,
       rgba(0, 229, 255, 0.2) 0,
       rgba(0, 229, 255, 0.2) 2px,
       rgba(255, 61, 240, 0.12) 2px,
-      rgba(255, 61, 240, 0.12) 5px
-    ),
-    linear-gradient(
-      180deg,
+      rgba(255, 61, 240, 0.12) 5px),
+    linear-gradient(180deg,
       transparent 0%,
       transparent 18%,
       rgba(255, 61, 240, 0.45) 18%,
@@ -937,32 +958,28 @@ body {
       transparent 56%,
       rgba(0, 229, 255, 0.4) 56%,
       rgba(0, 229, 255, 0.4) 68%,
-      transparent 68%
-    );
+      transparent 68%);
 }
 
 
 @supports (-webkit-background-clip: text) {
+
   [data-theme="cyber"] h1,
   [data-theme="cyber"] h2,
   [data-theme="cyber"] h3 {
     background-image:
-      repeating-linear-gradient(
-        180deg,
+      repeating-linear-gradient(180deg,
         rgba(0, 229, 255, 0.98) 0,
         rgba(0, 229, 255, 0.98) 2px,
         rgba(255, 61, 240, 0.92) 2px,
-        rgba(255, 61, 240, 0.92) 4px
-      ),
-      linear-gradient(
-        180deg,
+        rgba(255, 61, 240, 0.92) 4px),
+      linear-gradient(180deg,
         transparent 0%,
         transparent 42%,
         rgba(255, 61, 240, 1) 45%,
         rgba(0, 229, 255, 1) 52%,
         transparent 56%,
-        transparent 100%
-      );
+        transparent 100%);
     background-size: 100% 4px, 100% 68px;
     -webkit-background-clip: text;
     background-clip: text;
@@ -1016,15 +1033,19 @@ body {
 [data-theme="depth"] .bg-emerald-500 {
   background-color: var(--theme-alert-success);
 }
+
 [data-theme="depth"] .text-emerald-500 {
   color: var(--theme-alert-success);
 }
+
 [data-theme="depth"] .text-emerald-600 {
   color: var(--theme-alert-success);
 }
+
 [data-theme="depth"] .border-emerald-500 {
   border-color: var(--theme-alert-success);
 }
+
 [data-theme="depth"] .bg-neutral-200 {
   background-color: var(--theme-input-bg);
 }
@@ -1120,43 +1141,53 @@ body {
 [data-theme="dark"] .latex-logo,
 [data-theme="depth"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(255, 255, 255, 0.24))
-    drop-shadow(0 0 1px rgba(153, 153, 153, 0.336))
-    drop-shadow(0 0 2px rgba(255, 255, 255, 0.493));
+    drop-shadow(0 0 1px rgba(255, 255, 255, 0.24)) drop-shadow(0 0 1px rgba(153, 153, 153, 0.336)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.493));
 }
+
 [data-theme="cyber"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(135, 135, 255, 0.24))
-    drop-shadow(0 0 1px rgba(135, 135, 153, 0.336))
-    drop-shadow(0 0 2px rgba(135, 135, 255, 0.493));
+    drop-shadow(0 0 1px rgba(135, 135, 255, 0.24)) drop-shadow(0 0 1px rgba(135, 135, 153, 0.336)) drop-shadow(0 0 2px rgba(135, 135, 255, 0.493));
 }
-[data-theme="retro"] .latex-logo{
+
+[data-theme="retro"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px #b972357c)
-    drop-shadow(0 0 1px rgba(153, 143, 135, 0.336))
-    drop-shadow(0 0 2px #b972357c);
+    drop-shadow(0 0 1px #b972357c) drop-shadow(0 0 1px rgba(153, 143, 135, 0.336)) drop-shadow(0 0 2px #b972357c);
 }
+
 [data-theme="neon-green"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(135, 255, 135, 0.24))
-    drop-shadow(0 0 1px rgba(135, 153, 135, 0.336))
-    drop-shadow(0 0 2px rgba(135, 255, 135, 0.493));
+    drop-shadow(0 0 1px rgba(135, 255, 135, 0.24)) drop-shadow(0 0 1px rgba(135, 153, 135, 0.336)) drop-shadow(0 0 2px rgba(135, 255, 135, 0.493));
 }
+
 [data-theme="blood"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(255, 135, 135, 0.24))
-    drop-shadow(0 0 1px rgba(153, 135, 135, 0.336))
-    drop-shadow(0 0 2px rgba(255, 135, 135, 0.493));
+    drop-shadow(0 0 1px rgba(255, 135, 135, 0.24)) drop-shadow(0 0 1px rgba(153, 135, 135, 0.336)) drop-shadow(0 0 2px rgba(255, 135, 135, 0.493));
 }
+
 [data-theme="robot"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(135, 245, 255, 0.3))
-    drop-shadow(0 0 1px rgba(135, 175, 185, 0.35))
-    drop-shadow(0 0 3px rgba(0, 229, 255, 0.55));
+    drop-shadow(0 0 1px rgba(135, 245, 255, 0.3)) drop-shadow(0 0 1px rgba(135, 175, 185, 0.35)) drop-shadow(0 0 3px rgba(0, 229, 255, 0.55));
 }
+
 [data-theme="crt"] .latex-logo {
   filter:
-    drop-shadow(0 0 1px rgba(206, 220, 212, 0.3))
-    drop-shadow(0 0 1px rgba(120, 138, 127, 0.35))
-    drop-shadow(0 0 3px rgba(184, 204, 194, 0.45));
+    drop-shadow(0 0 1px rgba(206, 220, 212, 0.3)) drop-shadow(0 0 1px rgba(120, 138, 127, 0.35)) drop-shadow(0 0 3px rgba(184, 204, 194, 0.45));
+}
+
+@keyframes latex-pulse {
+  0% {
+    filter: drop-shadow(0 0 1px rgb(255, 255, 255, 1));
+  }
+
+  50% {
+    filter: drop-shadow(0 0 40px rgb(255, 255, 255, 1));
+  }
+
+  100% {
+    filter: drop-shadow(0 0 1px rgb(255, 255, 255, 1));
+  }
+}
+
+[data-theme] .easter-egg {
+  animation: latex-pulse 0.5s ease-in-out ;
 }

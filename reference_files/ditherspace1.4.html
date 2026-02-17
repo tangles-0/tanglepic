@@ -1,0 +1,972 @@
+<!--DitherSpace v1.4 by Landon Smith (build: 020526.946)-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DitherSpace</title>
+</head>
+<body>    
+    <h1>DitherSpace (v1.4)</h1>
+    An open-source port of the cyberspace.online image dithering algorithm. Source code is available on <a href="https://github.com/landonjsmith/DitherSpace">GitHub</a>. <br>
+    Translated to vanilla JS by Landon Smith | Additional dithering algorithms by Landon Smith | <a href="https://landonjsmith.com">Home</a>
+    <hr>
+    <h2>Load An Image</h2>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="loadSampleImage()">Generate Test Image</button>
+    <hr>
+    
+    <div class="main-container">
+        <div class="controls-section">
+            <h2>Image Parameters</h2>
+            <p>
+                <b>Algorithm:</b>
+                <select id="algorithm">
+                    <option value="bayer">Bayer 8x8 (WebGL-based)</option>
+                    <option value="fs">Floyd-Steinberg (CPU-based)</option>
+                </select>
+                <br>
+                <small style="display: block; margin-top: 5px; color: var(--secondary-text); line-height: 1.3;">
+                    <i>Small Note: The Floyd-Steinberg algorithm runs on the CPU. It provides higher quality error diffusion than the Bayer algorithm with serpentine scanning and subtle pre-blur for smoother gradients, but is slower in its processing than the Bayer algorithm.</i>
+                </small>
+            </p>
+            <p>
+                <b>Color Mode:</b>
+                <select id="colorMode">
+                    <option value="bw">Black & White</option>
+                    <option value="color">Full Color</option>
+                </select>
+            </p>
+            <p>
+                <b>Pixel Size:</b> <span id="pixelSizeValue">4</span>
+                <input type="range" id="pixelSize" min="1" max="20" value="4" step="1">
+            </p>
+            <p>
+                <b>Dither Amount:</b> <span id="ditherAmountValue">0.75</span>
+                <input type="range" id="ditherAmount" min="0" max="1" value="0.75" step="0.05">
+            </p>
+            <p>
+                <b>Bit Depth:</b> <span id="bitDepthValue">2</span>
+                <input type="range" id="bitDepth" min="1" max="8" value="2" step="1">
+            </p>
+            <p>
+                <b>Contrast:</b> <span id="contrastValue">1.0</span>
+                <input type="range" id="contrast" min="0.5" max="2" value="1" step="0.1">
+            </p>
+            <p>
+                <b>Scale:</b> <span id="scaleValue">1.0</span>
+                <input type="range" id="scale" min="0.1" max="2" value="1" step="0.1">
+            </p>
+            <hr>
+            <h3>Output Resolution</h3>
+            <div class="resolution-info">
+                <b>Original:</b> <span id="originalResolution">-</span><br>
+                <b>Output:</b> <span id="outputResolution">-</span>
+            </div>
+            <div class="resolution-controls">
+                <label>Width: <input type="number" id="targetWidth" min="1"></label>
+                <label>Height: <input type="number" id="targetHeight" min="1"></label>
+                <button onclick="applyCustomResolution()">Apply</button>
+                <button onclick="resetResolution()">Reset</button>
+            </div>
+            <label>
+                <input type="checkbox" id="maintainAspect" checked> Lock aspect ratio
+            </label>
+            <hr>
+            <div id="bwColorControls">
+                <p>
+                    <b>Foreground Color:</b>
+                    <input type="color" id="fgColor" value="#000000">
+                </p>
+                <p>
+                    <b>Background Color:</b>
+                    <input type="color" id="bgColor" value="#ffffff">
+                </p>
+            </div>
+        </div>
+        
+        <div class="image-section">
+            <h2>Image Output</h2>
+            <div class="canvas-container">
+                <canvas id="canvas"></canvas>
+            </div>
+            <p>
+                <button onclick="exportImage()">Export Dithered Image</button>
+            </p>
+        </div>
+    </div>
+
+<script>
+
+class ImageDitherer {
+    constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.gl = null;
+        this.program = null;
+        this.texture = null;
+        this.positionBuffer = null;
+        this.texCoordBuffer = null;
+        this.originalWidth = 800;
+        this.originalHeight = 600;
+        this.aspectRatio = 1;
+        this.imgElement = null;
+        this.fsCanvas = document.createElement('canvas');
+        this.lastRenderedAlgo = null;
+        this.params = this.loadPreferences();
+        this.initWebGL();
+    }
+    
+    loadPreferences() {
+        const saved = localStorage.getItem('ditherSpacePreferences');
+        const defaults = {
+            algorithm: 'bayer',
+            colorMode: 'bw',
+            pixelSize: 4,
+            ditherAmount: 0.75,
+            bitDepth: 2,
+            contrast: 1.0,
+            scale: 1.0,
+            fgColor: '#000000',
+            bgColor: '#ffffff'
+        };
+        
+        if (saved) {
+            try {
+                return { ...defaults, ...JSON.parse(saved) };
+            } catch (e) {
+                console.error('Error loading preferences:', e);
+                return defaults;
+            }
+        }
+        return defaults;
+    }
+    
+    savePreferences() {
+        try {
+            localStorage.setItem('ditherSpacePreferences', JSON.stringify(this.params));
+        } catch (e) {
+            console.error('Error saving preferences:', e);
+        }
+    }
+
+    initWebGL() {
+        this.gl = this.canvas.getContext('webgl', { preserveDrawingBuffer: true });
+        if (!this.gl) {
+            alert('WebGL is not supported in your browser');
+            return;
+        }
+
+        const vertexShaderSource = `
+            attribute vec2 a_position;
+            attribute vec2 a_texCoord;
+            varying vec2 v_texCoord;
+            void main() {
+                gl_Position = vec4(a_position, 0.0, 1.0);
+                v_texCoord = a_texCoord;
+            }
+        `;
+
+        const fragmentShaderSource = `
+            precision mediump float;
+            uniform sampler2D u_image;
+            uniform vec2 u_resolution;
+            uniform float u_pixelSize;
+            uniform float u_ditherAmount;
+            uniform float u_bitDepth;
+            uniform float u_contrast;
+            uniform vec3 u_fgColor;
+            uniform vec3 u_bgColor;
+            uniform int u_mode; 
+            uniform int u_colorMode;
+            varying vec2 v_texCoord;
+
+            float bayer8x8(vec2 pos) {
+                int x = int(mod(pos.x, 8.0));
+                int y = int(mod(pos.y, 8.0));
+                int idx = y * 8 + x;
+                if (idx == 0) return 0.0 / 64.0;
+                else if (idx == 1) return 32.0 / 64.0;
+                else if (idx == 2) return 8.0 / 64.0;
+                else if (idx == 3) return 40.0 / 64.0;
+                else if (idx == 4) return 2.0 / 64.0;
+                else if (idx == 5) return 34.0 / 64.0;
+                else if (idx == 6) return 10.0 / 64.0;
+                else if (idx == 7) return 42.0 / 64.0;
+                else if (idx == 8) return 48.0 / 64.0;
+                else if (idx == 9) return 16.0 / 64.0;
+                else if (idx == 10) return 56.0 / 64.0;
+                else if (idx == 11) return 24.0 / 64.0;
+                else if (idx == 12) return 50.0 / 64.0;
+                else if (idx == 13) return 18.0 / 64.0;
+                else if (idx == 14) return 58.0 / 64.0;
+                else if (idx == 15) return 26.0 / 64.0;
+                else if (idx == 16) return 12.0 / 64.0;
+                else if (idx == 17) return 44.0 / 64.0;
+                else if (idx == 18) return 4.0 / 64.0;
+                else if (idx == 19) return 36.0 / 64.0;
+                else if (idx == 20) return 14.0 / 64.0;
+                else if (idx == 21) return 46.0 / 64.0;
+                else if (idx == 22) return 6.0 / 64.0;
+                else if (idx == 23) return 38.0 / 64.0;
+                else if (idx == 24) return 60.0 / 64.0;
+                else if (idx == 25) return 28.0 / 64.0;
+                else if (idx == 26) return 52.0 / 64.0;
+                else if (idx == 27) return 20.0 / 64.0;
+                else if (idx == 28) return 62.0 / 64.0;
+                else if (idx == 29) return 30.0 / 64.0;
+                else if (idx == 30) return 54.0 / 64.0;
+                else if (idx == 31) return 22.0 / 64.0;
+                else if (idx == 32) return 3.0 / 64.0;
+                else if (idx == 33) return 35.0 / 64.0;
+                else if (idx == 34) return 11.0 / 64.0;
+                else if (idx == 35) return 43.0 / 64.0;
+                else if (idx == 36) return 1.0 / 64.0;
+                else if (idx == 37) return 33.0 / 64.0;
+                else if (idx == 38) return 9.0 / 64.0;
+                else if (idx == 39) return 41.0 / 64.0;
+                else if (idx == 40) return 51.0 / 64.0;
+                else if (idx == 41) return 19.0 / 64.0;
+                else if (idx == 42) return 59.0 / 64.0;
+                else if (idx == 43) return 27.0 / 64.0;
+                else if (idx == 44) return 49.0 / 64.0;
+                else if (idx == 45) return 17.0 / 64.0;
+                else if (idx == 46) return 57.0 / 64.0;
+                else if (idx == 47) return 25.0 / 64.0;
+                else if (idx == 48) return 15.0 / 64.0;
+                else if (idx == 49) return 47.0 / 64.0;
+                else if (idx == 50) return 7.0 / 64.0;
+                else if (idx == 51) return 39.0 / 64.0;
+                else if (idx == 52) return 13.0 / 64.0;
+                else if (idx == 53) return 45.0 / 64.0;
+                else if (idx == 54) return 5.0 / 64.0;
+                else if (idx == 55) return 37.0 / 64.0;
+                else if (idx == 56) return 63.0 / 64.0;
+                else if (idx == 57) return 31.0 / 64.0;
+                else if (idx == 58) return 55.0 / 64.0;
+                else if (idx == 59) return 23.0 / 64.0;
+                else if (idx == 60) return 61.0 / 64.0;
+                else if (idx == 61) return 29.0 / 64.0;
+                else if (idx == 62) return 53.0 / 64.0;
+                else return 21.0 / 64.0;
+            }
+
+            float random(vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            }
+
+            void main() {
+                if (u_mode == 1) {
+                    // Floyd-Steinberg mode
+                    vec4 color = texture2D(u_image, v_texCoord);
+                    
+                    if (u_colorMode == 0) {
+                        // B&W mode
+                        float gray = color.r;
+                        vec3 finalColor = mix(u_bgColor, u_fgColor, gray);
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    } else {
+                        // Full color, already processed by Floyd-Steinberg
+                        gl_FragColor = color;
+                    }
+                } else {
+                    // Bayer mode
+                    vec2 uv = v_texCoord;
+                    vec2 pixelatedUV = floor(uv * u_resolution / u_pixelSize) * u_pixelSize / u_resolution;
+                    vec4 color = texture2D(u_image, pixelatedUV);
+                    
+                    if (u_colorMode == 0) {
+                        // B&W mode
+                        float gray = dot(color.rgb, vec3(0.299, 0.587, 0.114));
+                        gray = (gray - 0.5) * u_contrast + 0.5;
+                        gray = clamp(gray, 0.0, 1.0);
+
+                        vec2 pixelPos = floor(gl_FragCoord.xy);
+                        float bayerValue = bayer8x8(pixelPos);
+                        float noise = random(pixelPos * 0.01) * 0.1;
+                        bayerValue = mix(bayerValue, noise, 0.3);
+
+                        float threshold = mix(0.5, bayerValue, u_ditherAmount);
+                        float dithered = step(threshold, gray);
+
+                        float levels = pow(2.0, u_bitDepth);
+                        float quantized = floor(gray * levels) / levels;
+                        float final = mix(quantized, dithered, u_ditherAmount);
+
+                        vec3 finalColor = mix(u_bgColor, u_fgColor, final);
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    } else {
+                        // Full color
+                        vec3 rgb = color.rgb;
+                        rgb = (rgb - 0.5) * u_contrast + 0.5;
+                        rgb = clamp(rgb, 0.0, 1.0);
+
+                        vec2 pixelPos = floor(gl_FragCoord.xy);
+                        float bayerValue = bayer8x8(pixelPos);
+                        float noise = random(pixelPos * 0.01) * 0.1;
+                        bayerValue = mix(bayerValue, noise, 0.3);
+
+                        float threshold = mix(0.5, bayerValue, u_ditherAmount);
+                        
+                        // Apply dithering to each channel independently
+                        vec3 dithered = step(vec3(threshold), rgb);
+                        
+                        float levels = pow(2.0, u_bitDepth);
+                        vec3 quantized = floor(rgb * levels) / levels;
+                        vec3 final = mix(quantized, dithered, u_ditherAmount);
+
+                        gl_FragColor = vec4(final, 1.0);
+                    }
+                }
+            }
+        `;
+
+        const vertexShader = this.createShader(this.gl.VERTEX_SHADER, vertexShaderSource);
+        const fragmentShader = this.createShader(this.gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+        if (!vertexShader || !fragmentShader) return;
+
+        this.program = this.createProgram(vertexShader, fragmentShader);
+        if (!this.program) return;
+
+        this.positionBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array([
+            -1, -1,
+             1, -1,
+            -1,  1,
+             1,  1,
+        ]), this.gl.STATIC_DRAW);
+
+        this.texCoordBuffer = this.gl.createBuffer();
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
+        this.gl.bufferData(this.gl.ARRAY_BUFFER, new Float32Array([
+            0, 1,
+            1, 1,
+            0, 0,
+            1, 0,
+        ]), this.gl.STATIC_DRAW);
+
+        this.texture = this.gl.createTexture();
+        this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_S, this.gl.CLAMP_TO_EDGE);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_WRAP_T, this.gl.CLAMP_TO_EDGE);
+        
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+        this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+    }
+
+    createShader(type, source) {
+        const shader = this.gl.createShader(type);
+        if (!shader) return null;
+        
+        this.gl.shaderSource(shader, source);
+        this.gl.compileShader(shader);
+
+        if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
+            console.error('Shader compilation error:', this.gl.getShaderInfoLog(shader));
+            this.gl.deleteShader(shader);
+            return null;
+        }
+
+        return shader;
+    }
+
+    createProgram(vertexShader, fragmentShader) {
+        const program = this.gl.createProgram();
+        if (!program) return null;
+
+        this.gl.attachShader(program, vertexShader);
+        this.gl.attachShader(program, fragmentShader);
+        this.gl.linkProgram(program);
+
+        if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
+            console.error('Program linking error:', this.gl.getProgramInfoLog(program));
+            this.gl.deleteProgram(program);
+            return null;
+        }
+
+        return program;
+    }
+
+    loadImage(src) {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            this.imgElement = img; 
+            this.originalWidth = img.width;
+            this.originalHeight = img.height;
+            this.aspectRatio = img.width / img.height;
+            this.updateCanvasSize();
+            updateResolutionDisplay();
+            
+            this.lastRenderedAlgo = null;
+            this.render();
+        };
+
+        img.onerror = () => {
+            alert('Failed to load image: ' + src);
+        };
+
+        img.src = src;
+    }
+
+    updateCanvasSize() {
+        this.canvas.width = Math.floor(this.originalWidth * this.params.scale);
+        this.canvas.height = Math.floor(this.originalHeight * this.params.scale);
+        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if (!result) return [0, 0, 0];
+        return [
+            parseInt(result[1], 16) / 255,
+            parseInt(result[2], 16) / 255,
+            parseInt(result[3], 16) / 255
+        ];
+    }
+
+    // Floyd-Steinberg dithering computation
+    computeFloydSteinberg() {
+        if (!this.imgElement) return null;
+
+        const pSize = Math.max(1, this.params.pixelSize);
+        const procW = Math.max(1, Math.floor(this.canvas.width / pSize));
+        const procH = Math.max(1, Math.floor(this.canvas.height / pSize));
+
+        this.fsCanvas.width = procW;
+        this.fsCanvas.height = procH;
+        const ctx = this.fsCanvas.getContext('2d');
+        
+        ctx.drawImage(this.imgElement, 0, 0, procW, procH);
+        
+        const imageData = ctx.getImageData(0, 0, procW, procH);
+        const data = imageData.data;
+        
+        const width = procW;
+        const height = procH;
+        const contrast = this.params.contrast;
+        const levels = Math.pow(2, this.params.bitDepth) - 1;
+        const ditherAmt = this.params.ditherAmount;
+        
+        if (this.params.colorMode === 'bw') {
+            // Black & White mode - process as grayscale
+            const grayData = new Float32Array(width * height);
+            
+            for (let i = 0; i < data.length; i += 4) {
+                let gray = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                gray /= 255.0;
+                
+                gray = (gray - 0.5) * contrast + 0.5;
+                gray = Math.max(0, Math.min(1, gray));
+                grayData[i/4] = gray;
+            }
+            
+            // Apply subtle blur for smoother gradients
+            const blurredGray = new Float32Array(width * height);
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    let sum = grayData[idx] * 4;
+                    let count = 4;
+                    
+                    if (x > 0) { sum += grayData[idx - 1]; count++; }
+                    if (x < width - 1) { sum += grayData[idx + 1]; count++; }
+                    if (y > 0) { sum += grayData[idx - width]; count++; }
+                    if (y < height - 1) { sum += grayData[idx + width]; count++; }
+                    
+                    blurredGray[idx] = sum / count;
+                }
+            }
+            // Blend 80% original with 20% blur
+            for (let i = 0; i < grayData.length; i++) {
+                grayData[i] = grayData[i] * 0.8 + blurredGray[i] * 0.2;
+            }
+
+            // Floyd-Steinberg error diffusion with serpentine scanning
+            for (let y = 0; y < height; y++) {
+                const direction = (y % 2 === 0) ? 1 : -1;
+                const xStart = (y % 2 === 0) ? 0 : width - 1;
+                const xEnd = (y % 2 === 0) ? width : -1;
+                
+                for (let x = xStart; x !== xEnd; x += direction) {
+                    const idx = y * width + x;
+                    const oldVal = grayData[idx];
+                    
+                    let newVal = Math.round(oldVal * levels) / levels;
+                    grayData[idx] = newVal;
+                    
+                    let error = (oldVal - newVal) * ditherAmt;
+
+                    // Distribute error with serpentine-aware directions
+                    if (x + direction >= 0 && x + direction < width) {
+                        grayData[idx + direction] += error * (7/16);
+                    }
+                    
+                    if (y + 1 < height) {
+                        if (x - direction >= 0 && x - direction < width) {
+                            grayData[idx + width - direction] += error * (3/16);
+                        }
+                        grayData[idx + width] += error * (5/16);
+                        if (x + direction >= 0 && x + direction < width) {
+                            grayData[idx + width + direction] += error * (1/16);
+                        }
+                    }
+                }
+            }
+
+            // Convert back to RGB
+            for (let i = 0; i < grayData.length; i++) {
+                const val = Math.max(0, Math.min(1, grayData[i])) * 255;
+                const px = Math.floor(val);
+                data[i*4] = px;
+                data[i*4+1] = px;
+                data[i*4+2] = px;
+                data[i*4+3] = 255;
+            }
+        } else {
+            // Full Color mode - process each RGB channel separately
+            const rData = new Float32Array(width * height);
+            const gData = new Float32Array(width * height);
+            const bData = new Float32Array(width * height);
+            
+            // Extract and normalize RGB channels
+            for (let i = 0; i < data.length; i += 4) {
+                let r = data[i] / 255.0;
+                let g = data[i+1] / 255.0;
+                let b = data[i+2] / 255.0;
+                
+                // Apply contrast
+                r = (r - 0.5) * contrast + 0.5;
+                g = (g - 0.5) * contrast + 0.5;
+                b = (b - 0.5) * contrast + 0.5;
+                
+                r = Math.max(0, Math.min(1, r));
+                g = Math.max(0, Math.min(1, g));
+                b = Math.max(0, Math.min(1, b));
+                
+                const idx = i / 4;
+                rData[idx] = r;
+                gData[idx] = g;
+                bData[idx] = b;
+            }
+            
+            // Apply subtle blur to each channel for smoother gradients
+            const blurR = new Float32Array(width * height);
+            const blurG = new Float32Array(width * height);
+            const blurB = new Float32Array(width * height);
+            
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const idx = y * width + x;
+                    let sumR = rData[idx] * 4, sumG = gData[idx] * 4, sumB = bData[idx] * 4;
+                    let count = 4;
+                    
+                    if (x > 0) { sumR += rData[idx - 1]; sumG += gData[idx - 1]; sumB += bData[idx - 1]; count++; }
+                    if (x < width - 1) { sumR += rData[idx + 1]; sumG += gData[idx + 1]; sumB += bData[idx + 1]; count++; }
+                    if (y > 0) { sumR += rData[idx - width]; sumG += gData[idx - width]; sumB += bData[idx - width]; count++; }
+                    if (y < height - 1) { sumR += rData[idx + width]; sumG += gData[idx + width]; sumB += bData[idx + width]; count++; }
+                    
+                    blurR[idx] = sumR / count;
+                    blurG[idx] = sumG / count;
+                    blurB[idx] = sumB / count;
+                }
+            }
+            
+            // Blend 80% original with 20% blur
+            for (let i = 0; i < rData.length; i++) {
+                rData[i] = rData[i] * 0.8 + blurR[i] * 0.2;
+                gData[i] = gData[i] * 0.8 + blurG[i] * 0.2;
+                bData[i] = bData[i] * 0.8 + blurB[i] * 0.2;
+            }
+
+            // Apply Floyd-Steinberg to RED channel with serpentine scanning
+            for (let y = 0; y < height; y++) {
+                const direction = (y % 2 === 0) ? 1 : -1;
+                const xStart = (y % 2 === 0) ? 0 : width - 1;
+                const xEnd = (y % 2 === 0) ? width : -1;
+                
+                for (let x = xStart; x !== xEnd; x += direction) {
+                    const idx = y * width + x;
+                    const oldVal = rData[idx];
+                    
+                    let newVal = Math.round(oldVal * levels) / levels;
+                    rData[idx] = newVal;
+                    
+                    let error = (oldVal - newVal) * ditherAmt;
+
+                    if (x + direction >= 0 && x + direction < width) {
+                        rData[idx + direction] += error * (7/16);
+                    }
+                    if (y + 1 < height) {
+                        if (x - direction >= 0 && x - direction < width) {
+                            rData[idx + width - direction] += error * (3/16);
+                        }
+                        rData[idx + width] += error * (5/16);
+                        if (x + direction >= 0 && x + direction < width) {
+                            rData[idx + width + direction] += error * (1/16);
+                        }
+                    }
+                }
+            }
+
+            // Apply Floyd-Steinberg to GREEN channel with serpentine scanning
+            for (let y = 0; y < height; y++) {
+                const direction = (y % 2 === 0) ? 1 : -1;
+                const xStart = (y % 2 === 0) ? 0 : width - 1;
+                const xEnd = (y % 2 === 0) ? width : -1;
+                
+                for (let x = xStart; x !== xEnd; x += direction) {
+                    const idx = y * width + x;
+                    const oldVal = gData[idx];
+                    
+                    let newVal = Math.round(oldVal * levels) / levels;
+                    gData[idx] = newVal;
+                    
+                    let error = (oldVal - newVal) * ditherAmt;
+
+                    if (x + direction >= 0 && x + direction < width) {
+                        gData[idx + direction] += error * (7/16);
+                    }
+                    if (y + 1 < height) {
+                        if (x - direction >= 0 && x - direction < width) {
+                            gData[idx + width - direction] += error * (3/16);
+                        }
+                        gData[idx + width] += error * (5/16);
+                        if (x + direction >= 0 && x + direction < width) {
+                            gData[idx + width + direction] += error * (1/16);
+                        }
+                    }
+                }
+            }
+
+            // Apply Floyd-Steinberg to BLUE channel with serpentine scanning
+            for (let y = 0; y < height; y++) {
+                const direction = (y % 2 === 0) ? 1 : -1;
+                const xStart = (y % 2 === 0) ? 0 : width - 1;
+                const xEnd = (y % 2 === 0) ? width : -1;
+                
+                for (let x = xStart; x !== xEnd; x += direction) {
+                    const idx = y * width + x;
+                    const oldVal = bData[idx];
+                    
+                    let newVal = Math.round(oldVal * levels) / levels;
+                    bData[idx] = newVal;
+                    
+                    let error = (oldVal - newVal) * ditherAmt;
+
+                    if (x + direction >= 0 && x + direction < width) {
+                        bData[idx + direction] += error * (7/16);
+                    }
+                    if (y + 1 < height) {
+                        if (x - direction >= 0 && x - direction < width) {
+                            bData[idx + width - direction] += error * (3/16);
+                        }
+                        bData[idx + width] += error * (5/16);
+                        if (x + direction >= 0 && x + direction < width) {
+                            bData[idx + width + direction] += error * (1/16);
+                        }
+                    }
+                }
+            }
+
+            // Combine channels back into image data
+            for (let i = 0; i < rData.length; i++) {
+                const r = Math.max(0, Math.min(1, rData[i])) * 255;
+                const g = Math.max(0, Math.min(1, gData[i])) * 255;
+                const b = Math.max(0, Math.min(1, bData[i])) * 255;
+                
+                data[i*4] = Math.floor(r);
+                data[i*4+1] = Math.floor(g);
+                data[i*4+2] = Math.floor(b);
+                data[i*4+3] = 255;
+            }
+        }
+        
+        return imageData;
+    }
+
+    render() {
+        if (!this.gl || !this.program || !this.imgElement) return;
+
+        this.gl.useProgram(this.program);
+
+        const positionLocation = this.gl.getAttribLocation(this.program, 'a_position');
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
+        this.gl.enableVertexAttribArray(positionLocation);
+        this.gl.vertexAttribPointer(positionLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+        const texCoordLocation = this.gl.getAttribLocation(this.program, 'a_texCoord');
+        this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.texCoordBuffer);
+        this.gl.enableVertexAttribArray(texCoordLocation);
+        this.gl.vertexAttribPointer(texCoordLocation, 2, this.gl.FLOAT, false, 0, 0);
+
+        if (this.params.algorithm === 'fs') {
+            const fsData = this.computeFloydSteinberg();
+            if (fsData) {
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+                
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.NEAREST);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.NEAREST);
+                this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, fsData);
+                this.lastRenderedAlgo = 'fs';
+            }
+            this.gl.uniform1i(this.gl.getUniformLocation(this.program, 'u_mode'), 1);
+        } else {
+            if (this.lastRenderedAlgo !== 'bayer') {
+                this.gl.bindTexture(this.gl.TEXTURE_2D, this.texture);
+                
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MIN_FILTER, this.gl.LINEAR);
+                this.gl.texParameteri(this.gl.TEXTURE_2D, this.gl.TEXTURE_MAG_FILTER, this.gl.LINEAR);
+                this.gl.texImage2D(this.gl.TEXTURE_2D, 0, this.gl.RGBA, this.gl.RGBA, this.gl.UNSIGNED_BYTE, this.imgElement);
+                this.lastRenderedAlgo = 'bayer';
+            }
+            this.gl.uniform1i(this.gl.getUniformLocation(this.program, 'u_mode'), 0);
+        }
+
+        this.gl.uniform2f(
+            this.gl.getUniformLocation(this.program, 'u_resolution'),
+            this.canvas.width, this.canvas.height
+        );
+        this.gl.uniform1f(this.gl.getUniformLocation(this.program, 'u_pixelSize'), this.params.pixelSize);
+        this.gl.uniform1f(this.gl.getUniformLocation(this.program, 'u_ditherAmount'), this.params.ditherAmount);
+        this.gl.uniform1f(this.gl.getUniformLocation(this.program, 'u_bitDepth'), this.params.bitDepth);
+        this.gl.uniform1f(this.gl.getUniformLocation(this.program, 'u_contrast'), this.params.contrast);
+
+        const fgColor = this.hexToRgb(this.params.fgColor);
+        const bgColor = this.hexToRgb(this.params.bgColor);
+        this.gl.uniform3f(this.gl.getUniformLocation(this.program, 'u_fgColor'), fgColor[0], fgColor[1], fgColor[2]);
+        this.gl.uniform3f(this.gl.getUniformLocation(this.program, 'u_bgColor'), bgColor[0], bgColor[1], bgColor[2]);
+        
+        // Set color mode uniform (0 = B&W, 1 = Full Color)
+        const colorModeValue = this.params.colorMode === 'color' ? 1 : 0;
+        this.gl.uniform1i(this.gl.getUniformLocation(this.program, 'u_colorMode'), colorModeValue);
+
+        this.gl.drawArrays(this.gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    updateParams(newParams) {
+        const needsResize = newParams.scale !== undefined && newParams.scale !== this.params.scale;
+        const colorModeChanged = newParams.colorMode !== undefined && newParams.colorMode !== this.params.colorMode;
+        
+        Object.assign(this.params, newParams);
+        this.savePreferences();
+        
+        if (colorModeChanged) {
+            updateColorControlsVisibility();
+        }
+        
+        if (needsResize) {
+            this.updateCanvasSize();
+            updateResolutionDisplay();
+        }
+        
+        this.render();
+    }
+}
+
+var ditherer = new ImageDitherer('canvas');
+var isUpdatingResolutionInputs = false;
+
+var controls = {
+    algorithm: document.getElementById('algorithm'),
+    colorMode: document.getElementById('colorMode'),
+    pixelSize: document.getElementById('pixelSize'),
+    ditherAmount: document.getElementById('ditherAmount'),
+    bitDepth: document.getElementById('bitDepth'),
+    contrast: document.getElementById('contrast'),
+    scale: document.getElementById('scale'),
+    fgColor: document.getElementById('fgColor'),
+    bgColor: document.getElementById('bgColor'),
+    imageInput: document.getElementById('imageInput')
+};
+
+var valueDisplays = {
+    pixelSize: document.getElementById('pixelSizeValue'),
+    ditherAmount: document.getElementById('ditherAmountValue'),
+    bitDepth: document.getElementById('bitDepthValue'),
+    contrast: document.getElementById('contrastValue'),
+    scale: document.getElementById('scaleValue')
+};
+
+function updateColorControlsVisibility() {
+    const bwControls = document.getElementById('bwColorControls');
+    if (ditherer.params.colorMode === 'color') {
+        bwControls.style.display = 'none';
+    } else {
+        bwControls.style.display = 'block';
+    }
+}
+
+function setupControl(key) {
+    if (key === 'imageInput') return;
+    
+    controls[key].addEventListener('input', function(e) {
+        var value = e.target.type === 'color' || e.target.tagName === 'SELECT' ? e.target.value : parseFloat(e.target.value);
+        
+        if (valueDisplays[key]) {
+            valueDisplays[key].textContent = value;
+        }
+        
+        var params = {};
+        params[key] = value;
+        ditherer.updateParams(params);
+    });
+}
+
+for (var key in controls) {
+    setupControl(key);
+}
+
+function restoreUIFromPreferences() {
+    controls.algorithm.value = ditherer.params.algorithm;
+    controls.colorMode.value = ditherer.params.colorMode;
+    controls.pixelSize.value = ditherer.params.pixelSize;
+    controls.ditherAmount.value = ditherer.params.ditherAmount;
+    controls.bitDepth.value = ditherer.params.bitDepth;
+    controls.contrast.value = ditherer.params.contrast;
+    controls.scale.value = ditherer.params.scale;
+    controls.fgColor.value = ditherer.params.fgColor;
+    controls.bgColor.value = ditherer.params.bgColor;
+    
+    valueDisplays.pixelSize.textContent = ditherer.params.pixelSize;
+    valueDisplays.ditherAmount.textContent = ditherer.params.ditherAmount;
+    valueDisplays.bitDepth.textContent = ditherer.params.bitDepth;
+    valueDisplays.contrast.textContent = ditherer.params.contrast;
+    valueDisplays.scale.textContent = ditherer.params.scale;
+    
+    updateColorControlsVisibility();
+}
+
+restoreUIFromPreferences();
+
+controls.imageInput.addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (file) {
+        var reader = new FileReader();
+        reader.onload = function(event) {
+            ditherer.loadImage(event.target.result);
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+function loadSampleImage() {
+    var tempCanvas = document.createElement('canvas');
+    tempCanvas.width = 400;
+    tempCanvas.height = 400;
+    var ctx = tempCanvas.getContext('2d');
+
+    var gradient = ctx.createRadialGradient(200, 200, 0, 200, 200, 200);
+    gradient.addColorStop(0, '#ffffff');
+    gradient.addColorStop(0.5, '#888888');
+    gradient.addColorStop(1, '#000000');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 400, 400);
+
+    for (var i = 0; i < 20; i++) {
+        var x = Math.random() * 400;
+        var y = Math.random() * 400;
+        var r = Math.random() * 30 + 10;
+        var opacity = Math.random() * 0.5 + 0.3;
+        
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(' + Math.floor(Math.random() * 255) + ', ' + Math.floor(Math.random() * 255) + ', ' + Math.floor(Math.random() * 255) + ', ' + opacity + ')';
+        ctx.fill();
+    }
+
+    ditherer.loadImage(tempCanvas.toDataURL());
+}
+
+function exportImage() {
+    var canvas = document.getElementById('canvas');
+    if (canvas.width === 0 || canvas.height === 0) {
+        alert('No image loaded. Please load an image first.');
+        return;
+    }
+    
+    var link = document.createElement('a');
+    link.download = 'dithered-image.png';
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+}
+
+function updateResolutionDisplay() {
+    isUpdatingResolutionInputs = true;
+    
+    document.getElementById('originalResolution').textContent = 
+        ditherer.originalWidth + ' × ' + ditherer.originalHeight + ' px';
+    document.getElementById('outputResolution').textContent = 
+        ditherer.canvas.width + ' × ' + ditherer.canvas.height + ' px';
+    
+    document.getElementById('targetWidth').value = ditherer.canvas.width;
+    document.getElementById('targetHeight').value = ditherer.canvas.height;
+    
+    setTimeout(function() {
+        isUpdatingResolutionInputs = false;
+    }, 0);
+}
+
+function applyCustomResolution() {
+    var targetWidth = parseInt(document.getElementById('targetWidth').value);
+    var targetHeight = parseInt(document.getElementById('targetHeight').value);
+    
+    if (!targetWidth || !targetHeight || targetWidth < 1 || targetHeight < 1) {
+        alert('Please enter valid dimensions');
+        return;
+    }
+    
+    var scaleX = targetWidth / ditherer.originalWidth;
+    var scaleY = targetHeight / ditherer.originalHeight;
+    
+    ditherer.canvas.width = targetWidth;
+    ditherer.canvas.height = targetHeight;
+    ditherer.gl.viewport(0, 0, targetWidth, targetHeight);
+    ditherer.params.scale = Math.min(scaleX, scaleY);
+    
+    document.getElementById('scale').value = ditherer.params.scale;
+    document.getElementById('scaleValue').textContent = ditherer.params.scale.toFixed(1);
+    
+    ditherer.render();
+    updateResolutionDisplay();
+}
+
+function resetResolution() {
+    ditherer.params.scale = 1.0;
+    document.getElementById('scale').value = 1.0;
+    document.getElementById('scaleValue').textContent = '1.0';
+    ditherer.updateCanvasSize();
+    ditherer.render();
+    updateResolutionDisplay();
+}
+
+document.getElementById('targetWidth').addEventListener('input', function(e) {
+    if (isUpdatingResolutionInputs) return;
+    
+    if (document.getElementById('maintainAspect').checked) {
+        var width = parseInt(e.target.value);
+        if (width > 0) {
+            var height = Math.round(width / ditherer.aspectRatio);
+            document.getElementById('targetHeight').value = height;
+        }
+    }
+});
+
+document.getElementById('targetHeight').addEventListener('input', function(e) {
+    if (isUpdatingResolutionInputs) return;
+    
+    if (document.getElementById('maintainAspect').checked) {
+        var height = parseInt(e.target.value);
+        if (height > 0) {
+            var width = Math.round(height * ditherer.aspectRatio);
+            document.getElementById('targetWidth').value = width;
+        }
+    }
+});
+
+loadSampleImage();
+</script>
+</body>
+</html>

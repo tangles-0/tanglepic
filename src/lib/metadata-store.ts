@@ -1308,7 +1308,7 @@ export type AppSettings = {
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
-  motd: "Welcome to LaTeX.",
+  motd: "Welcome to latex!.",
   costThisMonth: 0,
   fundedThisMonth: 0,
   donateUrl: undefined,

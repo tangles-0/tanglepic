@@ -4,9 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { getUserTheme } from "@/lib/metadata-store";
 import { ThemeProvider } from "@/components/theme/theme-provider";
 import FloatingThemeSelector from "@/components/theme/floating-theme-selector";
+import { FloatingLogo } from "@/components/theme/floating-logo";
 
 export const metadata = {
-  title: "LaTeX",
+  title: "latex",
   description: "Upload images, organize albums, and share direct links.",
 };
 
@@ -38,13 +39,12 @@ export default async function RootLayout({
         </head>
       ) : null}
       <body className="min-h-screen bg-white text-neutral-900">
-          <div className="fixed bottom-0 right-0 z-40 pointer-events-none">
-            <img src="/latex-logo.png" alt="LaTeX logo" width="48" className="latex-logo" />
-          </div>
           <ThemeProvider initialTheme={theme} preferLocalStorage={!userId}>
             <FloatingThemeSelector />
             {children}
+            <FloatingLogo />
           </ThemeProvider>
+          
       </body>
     </html>
   );

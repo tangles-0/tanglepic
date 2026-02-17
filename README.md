@@ -40,14 +40,14 @@ _Also for videos and other files (later)_
 - [x] add github link
 - [x] add download button
 - [x] ability to rotate images
-- [ ] ability to edit album display order - drag n drop 'up' / 'down' btns
-- [ ] ability to rename albums (just click on the title and start typing)
-- [ ] ability to caption images in an album (caption applies to the image in the context of the image-in-that-album, not to the image, as images can be in more than one album)
+- [x] ability to edit album display order - drag n drop 'up' / 'down' btns
+- [x] ability to rename albums (just click on the title and start typing)
+- [x] ability to caption images in an album (caption applies to the image in the context of the image-in-that-album, not to the image, as images can be in more than one album)
 - [ ] alternative 'tiles' layout for 'guest' album view, button to switch between that and current fullwidth layout, and a slider to adjust tile size
 
 ### TODO LATERER:
 
-- [ ] see if landon will let me add [his ditherspace](https://landonjsmith.com/projects/ditherspace.html) to this app
+- [ ] add landon's [ditherspace](https://landonjsmith.com/projects/ditherspace.html) to this app
 - [ ] keyboard shortcuts
 - [ ] TUI
 - [ ] support video formats
