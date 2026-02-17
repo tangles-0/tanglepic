@@ -8,8 +8,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "db:push-cmd": "drizzle-kit push --config ./drizzle.config.ts",
-    "db:push": "docker exec -it tanglepic-app pnpm db:push-cmd"
+    "db:push": "drizzle-kit push --config ./drizzle.config.ts",
+    "db:push-container": "docker exec -it latex-app pnpm db:push"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.969.0",

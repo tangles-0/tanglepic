@@ -5,7 +5,7 @@ networks:
 
 services:
   app:
-    container_name: tanglepic-app
+    container_name: latex-app
     build:
       context: .
       args:
@@ -22,29 +22,29 @@ services:
       db:
         condition: service_healthy
     volumes:
-      - tanglepic_data:/app/data
+      - latex_data:/app/data
     networks:
       - proxy
       - default
   db:
-    container_name: tanglepic-db
+    container_name: latex-db
     image: postgres:16
     ports:
       - "5432:5432"
     environment:
-      - POSTGRES_DB=tanglepic
-      - POSTGRES_USER=tanglepic
-      - POSTGRES_PASSWORD=tanglepic
+      - POSTGRES_DB=latex
+      - POSTGRES_USER=latex
+      - POSTGRES_PASSWORD=latex
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tanglepic -d tanglepic"]
+      test: ["CMD-SHELL", "pg_isready -U latex -d latex"]
       interval: 5s
       timeout: 5s
       retries: 10
     volumes:
-      - tanglepic_db:/var/lib/postgresql/data
+      - latex_db:/var/lib/postgresql/data
     networks:
       - default
 
 volumes:
-  tanglepic_db:
-  tanglepic_data:
+  latex_db:
+  latex_data:
