@@ -1,11 +1,12 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { getAppSettings, getUserUploadStats } from "@/lib/metadata-store";
+import { getAppSettings, getLatestPatchNote, getUserUploadStats } from "@/lib/metadata-store";
 import AuthForms from "@/components/auth-forms";
 import AlertBanner from "@/components/ui/alert-banner";
 import TextLink from "@/components/ui/text-link";
 import { BrandsGithub } from '@energiz3r/icon-library/Icons/Brands/BrandsGithub';
 import Link from "next/link";
+import PatchNoteMarkdown from "@/components/patch-note-markdown";
 
 function formatBytes(value: number): string {
   if (value < 1024) return `${value} B`;
@@ -28,6 +29,7 @@ export default async function Home() {
   const cost = settings.costThisMonth;
   const progress = cost > 0 ? Math.min(100, Math.round((funded / cost) * 100)) : 0;
   const userStats = userId ? await getUserUploadStats(userId) : null;
+  const latestPatchNote = await getLatestPatchNote();
 
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-8 px-6 py-10 text-sm">
@@ -43,7 +45,7 @@ export default async function Home() {
       </header>
 
       <section className="rounded-md border border-neutral-200 p-4 text-sm relative">
-        <h2 className="text-lg font-medium">patch notes</h2>
+        <h2 className="text-lg font-medium">motd</h2>
         <p className="mt-2 text-xs text-neutral-600">{settings.motd}</p>
         <div className="absolute top-0 right-0">
           <Link
@@ -55,6 +57,27 @@ export default async function Home() {
             <BrandsGithub className="p-2 h-10 w-10" fill="currentColor" />
           </Link>
         </div>
+      </section>
+
+      <section className="rounded-md border border-neutral-200 p-4 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-medium">latest patch note</h2>
+          <TextLink href="/patch-notes" className="text-xs">
+            view all
+          </TextLink>
+        </div>
+        {latestPatchNote ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-neutral-500">
+              {new Date(latestPatchNote.publishedAt).toLocaleString()}
+            </p>
+            <div className="text-sm">
+              <PatchNoteMarkdown content={latestPatchNote.content} />
+            </div>
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-neutral-500">No patch notes published yet.</p>
+        )}
       </section>
 
       {userId ? (

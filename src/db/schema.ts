@@ -37,6 +37,14 @@ export const users = pgTable("users", {
   theme: text("theme").notNull().default("dark"),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
   lastLoginAt: timestamp("last_login_at", { mode: "date" }),
+  lastPatchNoteDismissed: timestamp("last_patch_note_dismissed", { mode: "date" }),
+});
+
+export const patchNotes = pgTable("patch_notes", {
+  id: text("id").primaryKey(),
+  content: text("content").notNull(),
+  publishedAt: timestamp("published_at", { mode: "date" }).notNull(),
+  updatedAt: timestamp("updated_at", { mode: "date" }).notNull(),
 });
 
 export const albums = pgTable("albums", {

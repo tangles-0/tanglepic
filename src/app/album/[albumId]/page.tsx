@@ -1,9 +1,15 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { getAlbumForUser, listImagesForAlbum } from "@/lib/metadata-store";
+import {
+  getAlbumForUser,
+  getLatestPatchNote,
+  getUserLastPatchNoteDismissed,
+  listImagesForAlbum,
+} from "@/lib/metadata-store";
 import GalleryClient from "@/components/gallery-client";
 import AlbumShareControls from "@/components/album-share-controls";
+import PatchNoteBanner from "@/components/patch-note-banner";
 import PageHeader from "@/components/ui/page-header";
 
 export default async function AlbumPage({
@@ -23,7 +29,14 @@ export default async function AlbumPage({
     redirect("/gallery");
   }
 
-  const images = await listImagesForAlbum(userId, albumId);
+  const [images, latestPatchNote, dismissedAt] = await Promise.all([
+    listImagesForAlbum(userId, albumId),
+    getLatestPatchNote(),
+    getUserLastPatchNoteDismissed(userId),
+  ]);
+  const shouldShowPatchBanner =
+    latestPatchNote &&
+    (!dismissedAt || new Date(latestPatchNote.publishedAt).getTime() > new Date(dismissedAt).getTime());
 
   return (
     <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
@@ -38,6 +51,13 @@ export default async function AlbumPage({
           </p>
         ) : null}
       </PageHeader>
+
+      {shouldShowPatchBanner ? (
+        <PatchNoteBanner
+          publishedAt={latestPatchNote.publishedAt}
+          firstLine={latestPatchNote.firstLine}
+        />
+      ) : null}
 
       <AlbumShareControls albumId={albumId} />
 

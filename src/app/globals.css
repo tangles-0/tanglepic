@@ -28,6 +28,9 @@ html {
   --theme-alert-success: #047857;
   --theme-alert-success-bg: #ecfdf5;
   --theme-alert-success-border: #bbf7d0;
+  --theme-alert-info: var(--theme-alert-success);
+  --theme-alert-info-bg: var(--theme-alert-success-bg);
+  --theme-alert-info-border: var(--theme-alert-success-border);
   --theme-control-bg: rgba(255, 255, 255, 0.85);
   --theme-control-border: #e2e8f0;
   --theme-control-text: #0f172a;

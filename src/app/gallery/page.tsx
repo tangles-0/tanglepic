@@ -1,8 +1,15 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
-import { isAdminUser, listAlbums, listImagesForUser } from "@/lib/metadata-store";
+import {
+  getLatestPatchNote,
+  getUserLastPatchNoteDismissed,
+  isAdminUser,
+  listAlbums,
+  listImagesForUser,
+} from "@/lib/metadata-store";
 import GalleryTabs from "@/components/gallery-tabs";
+import PatchNoteBanner from "@/components/patch-note-banner";
 import PageHeader from "@/components/ui/page-header";
 import TextLink from "@/components/ui/text-link";
 
@@ -17,14 +24,19 @@ export default async function GalleryPage({
     redirect("/");
   }
 
-  const [albums, images, isAdmin] = await Promise.all([
+  const [albums, images, isAdmin, latestPatchNote, dismissedAt] = await Promise.all([
     listAlbums(userId),
     listImagesForUser(userId),
     isAdminUser(userId),
+    getLatestPatchNote(),
+    getUserLastPatchNoteDismissed(userId),
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "images";
   const pageTitle = initialTab === "albums" ? "ur albums" : "ur gallery";
+  const shouldShowPatchBanner =
+    latestPatchNote &&
+    (!dismissedAt || new Date(latestPatchNote.publishedAt).getTime() > new Date(dismissedAt).getTime());
 
   return (
     <main className="flex min-h-screen w-full flex-col gap-6 px-6 py-10 text-sm">
@@ -48,6 +60,13 @@ export default async function GalleryPage({
           </div>
         }
       />
+
+      {shouldShowPatchBanner ? (
+        <PatchNoteBanner
+          publishedAt={latestPatchNote.publishedAt}
+          firstLine={latestPatchNote.firstLine}
+        />
+      ) : null}
 
       <GalleryTabs
         initialTab={initialTab}

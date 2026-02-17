@@ -1,5 +1,7 @@
 import { randomUUID, randomBytes } from "crypto";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { remark } from "remark";
+import stripMarkdown from "strip-markdown";
 import { db } from "@/db";
 import {
   albumShares,
@@ -8,6 +10,7 @@ import {
   groupLimits,
   groups,
   images,
+  patchNotes,
   shares,
   users,
 } from "@/db/schema";
@@ -41,7 +44,39 @@ export type ShareLink = {
   code?: string | null;
 };
 
+export type PatchNoteSummary = {
+  id: string;
+  publishedAt: string;
+  updatedAt: string;
+  firstLine: string;
+};
+
+export type PatchNoteEntry = PatchNoteSummary & {
+  content: string;
+};
+
 const SHARE_CODE_LENGTH = 8;
+
+function normalizePatchNoteMarkdown(input: string): string {
+  // Support custom link syntax: [https://some-link.com](link text)
+  return input.replace(/\[([a-z][a-z0-9+.-]*:\/\/[^\]]+)\]\(([^)]+)\)/gi, "[$2]($1)");
+}
+
+function stripMarkdownToText(input: string): string {
+  try {
+    const stripped = String(
+      remark().use(stripMarkdown).processSync(normalizePatchNoteMarkdown(input)),
+    );
+    return stripped.replace(/\s+/g, " ").trim();
+  } catch {
+    return input.replace(/[*_`#[\]()>!-]/g, "").replace(/\s+/g, " ").trim();
+  }
+}
+
+function getPatchNoteFirstLine(content: string): string {
+  const firstLine = content.split(/\r?\n/, 1)[0]?.trim() ?? "";
+  return stripMarkdownToText(firstLine);
+}
 
 function mapImageRow(row: typeof images.$inferSelect): ImageEntry {
   return {
@@ -936,6 +971,143 @@ export async function getUserTheme(userId: string): Promise<string> {
 
 export async function setUserTheme(userId: string, theme: string): Promise<void> {
   await db.update(users).set({ theme }).where(eq(users.id, userId));
+}
+
+function mapPatchNoteSummary(
+  row: Pick<typeof patchNotes.$inferSelect, "id" | "publishedAt" | "updatedAt" | "content">,
+): PatchNoteSummary {
+  return {
+    id: row.id,
+    publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    firstLine: getPatchNoteFirstLine(row.content),
+  };
+}
+
+export async function listPatchNotes(limit?: number): Promise<PatchNoteSummary[]> {
+  const rows =
+    typeof limit === "number"
+      ? await db
+          .select({
+            id: patchNotes.id,
+            publishedAt: patchNotes.publishedAt,
+            updatedAt: patchNotes.updatedAt,
+            content: patchNotes.content,
+          })
+          .from(patchNotes)
+          .orderBy(desc(patchNotes.publishedAt), desc(patchNotes.updatedAt))
+          .limit(limit)
+      : await db
+          .select({
+            id: patchNotes.id,
+            publishedAt: patchNotes.publishedAt,
+            updatedAt: patchNotes.updatedAt,
+            content: patchNotes.content,
+          })
+          .from(patchNotes)
+          .orderBy(desc(patchNotes.publishedAt), desc(patchNotes.updatedAt));
+
+  return rows.map(mapPatchNoteSummary);
+}
+
+export async function getPatchNoteById(id: string): Promise<PatchNoteEntry | undefined> {
+  const [row] = await db.select().from(patchNotes).where(eq(patchNotes.id, id)).limit(1);
+  if (!row) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    content: row.content,
+    publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    firstLine: getPatchNoteFirstLine(row.content),
+  };
+}
+
+export async function getLatestPatchNote(): Promise<PatchNoteEntry | undefined> {
+  const [row] = await db
+    .select()
+    .from(patchNotes)
+    .orderBy(desc(patchNotes.publishedAt), desc(patchNotes.updatedAt))
+    .limit(1);
+  if (!row) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    content: row.content,
+    publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    firstLine: getPatchNoteFirstLine(row.content),
+  };
+}
+
+export async function createPatchNote(content: string): Promise<PatchNoteEntry> {
+  const noteId = randomUUID();
+  const now = new Date();
+  await db.insert(patchNotes).values({
+    id: noteId,
+    content,
+    publishedAt: now,
+    updatedAt: now,
+  });
+
+  return {
+    id: noteId,
+    content,
+    publishedAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+    firstLine: getPatchNoteFirstLine(content),
+  };
+}
+
+export async function updatePatchNote(
+  id: string,
+  content: string,
+): Promise<PatchNoteEntry | undefined> {
+  const updatedAt = new Date();
+  const [row] = await db
+    .update(patchNotes)
+    .set({ content, updatedAt })
+    .where(eq(patchNotes.id, id))
+    .returning();
+  if (!row) {
+    return undefined;
+  }
+  return {
+    id: row.id,
+    content: row.content,
+    publishedAt: row.publishedAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    firstLine: getPatchNoteFirstLine(row.content),
+  };
+}
+
+export async function deletePatchNote(id: string): Promise<boolean> {
+  const result = await db
+    .delete(patchNotes)
+    .where(eq(patchNotes.id, id))
+    .returning({ id: patchNotes.id });
+  return result.length > 0;
+}
+
+export async function getUserLastPatchNoteDismissed(userId: string): Promise<string | undefined> {
+  const [row] = await db
+    .select({ lastPatchNoteDismissed: users.lastPatchNoteDismissed })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  return row?.lastPatchNoteDismissed?.toISOString();
+}
+
+export async function setUserLastPatchNoteDismissed(
+  userId: string,
+  dismissedAt: Date | null,
+): Promise<void> {
+  await db
+    .update(users)
+    .set({ lastPatchNoteDismissed: dismissedAt })
+    .where(eq(users.id, userId));
 }
 
 export type GroupLimits = {
