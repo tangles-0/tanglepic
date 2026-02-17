@@ -18,9 +18,9 @@ import { SharePill } from "./share-pill";
 import { DitherEditor } from "./dither-editor";
 import { DitherIcon } from "./icons/dither";
 
-const SHOW_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-show-album-images";
+const SHOW_ALBUM_IMAGES_STORAGE_KEY = "latex-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
-const INTERNAL_IMAGE_DRAG_TYPE = "application/x-tanglepic-image-id";
+const INTERNAL_IMAGE_DRAG_TYPE = "application/x-latex-image-id";
 
 type GalleryImage = {
   id: string;

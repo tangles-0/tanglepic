@@ -28,7 +28,7 @@ export default async function RootLayout({
             dangerouslySetInnerHTML={{
               __html: `
                 try {
-                  const stored = localStorage.getItem("tanglepic-theme");
+                  const stored = localStorage.getItem("latex-theme");
                   if (stored) {
                     document.documentElement.dataset.theme = stored;
                   }

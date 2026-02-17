@@ -7,7 +7,7 @@ import GalleryClient from "@/components/gallery-client";
 import { LightPencil } from '@energiz3r/icon-library/Icons/Light/LightPencil';
 import { LightTrashAlt } from "@energiz3r/icon-library/Icons/Light/LightTrashAlt";
 
-const HIDE_ALBUM_IMAGES_STORAGE_KEY = "tanglepic-gallery-hide-album-images";
+const HIDE_ALBUM_IMAGES_STORAGE_KEY = "latex-gallery-hide-album-images";
 
 type AlbumInfo = {
   id: string;

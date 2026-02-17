@@ -3,7 +3,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { THEME_SET } from "@/components/theme/themes";
 
-const THEME_STORAGE_KEY = "tanglepic-theme";
+const THEME_STORAGE_KEY = "latex-theme";
 
 type ThemeContextValue = {
   theme: string;

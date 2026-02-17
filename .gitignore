@@ -49,3 +49,5 @@ certificates
 /data/
 docker-compose.override.yml
 /deployment/node_modules
+
+latex-config.md

@@ -37,7 +37,7 @@ export default async function Home() {
         <div className="relative">
           <h1 className="text-2xl font-semibold mt-1">latex <span className="font-medium text-neutral-500">img_srv</span></h1>
           <div className="absolute top-[-15px] left-[-22px]">
-            <img src="/latex-logo.png" alt="TanglePic" width="32px" className="latex-logo z-5" />
+            <img src="/latex-logo.png" alt="latex" width="32px" className="latex-logo z-5" />
           </div>
         </div>
         <p className="text-neutral-600">
@@ -65,7 +65,7 @@ export default async function Home() {
             |
           </div>
           <Link
-            href="https://github.com/tangles-0/tanglepic"
+            href="https://github.com/tangles-0/latex"
             target="_blank"
             rel="noopener noreferrer"
 
