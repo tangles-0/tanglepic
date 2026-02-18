@@ -53,6 +53,10 @@ export class AppStack extends cdk.Stack {
       memoryLimitMiB: props.config.memoryMiB,
       taskRole,
       family: `${prefix}-task`,
+      runtimePlatform: {
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
+        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
+      },
     });
 
     const container = taskDef.addContainer("LatexContainer", {
@@ -80,6 +84,7 @@ export class AppStack extends cdk.Stack {
         PGUSER: ecs.Secret.fromSecretsManager(props.dbCredentialsSecret, "username"),
         PGPASSWORD: ecs.Secret.fromSecretsManager(props.dbCredentialsSecret, "password"),
       },
+      readonlyRootFilesystem: true,
     });
     container.addPortMappings({
       containerPort: 3000,
@@ -106,7 +111,13 @@ export class AppStack extends cdk.Stack {
       securityGroup: props.albSecurityGroup,
       loadBalancerName: `${prefix}-alb`,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
+      dropInvalidHeaderFields: true,
+      deletionProtection: props.config.environment === "prod",
+      desyncMitigationMode: elbv2.DesyncMitigationMode.STRICTEST,
     });
+
+    this.loadBalancer.setAttribute("routing.http.desync_mitigation_mode", "strictest");
+    this.loadBalancer.setAttribute("routing.http.x_amzn_tls_version_and_cipher_suite.enabled", "true");
 
     const certificate = acm.Certificate.fromCertificateArn(
       this,

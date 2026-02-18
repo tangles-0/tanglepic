@@ -36,7 +36,7 @@ function parseFileName(fileName: string): {
 function publicCacheHeaders(ext: string): Headers {
   return new Headers({
     "Content-Type": contentTypeForExt(ext),
-    "Cache-Control": "public, max-age=31536000, immutable",
+    "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=30, must-revalidate",
     Vary: "Accept-Encoding",
   });
 }

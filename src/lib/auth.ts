@@ -27,7 +27,14 @@ function readHeader(headers: RequestHeaders | undefined, key: string): string | 
 }
 
 function getClientKey(request: RequestLike | undefined): string {
-  const forwarded = readHeader(request?.headers, "x-forwarded-for")?.split(",")[0]?.trim();
+  const forwardedChain = readHeader(request?.headers, "x-forwarded-for")
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  // Behind ALB/reverse proxies we trust the most recently appended hop.
+  // ALB appends the immediate peer to the right-most side of x-forwarded-for.
+  // Trusting the first hop allows clients to spoof a custom value and bypass IP-based rate limits.
+  const forwarded = forwardedChain?.[forwardedChain.length - 1];
   const ip = forwarded || readHeader(request?.headers, "x-real-ip") || "unknown";
   return ip;
 }
