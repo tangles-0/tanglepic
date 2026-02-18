@@ -37,6 +37,8 @@ export class CiCdStack extends cdk.Stack {
             "kms:*",
             "s3:*",
             "ssm:*",
+            "iam:PassRole",
+            "iam:GetRole",
             "sts:GetCallerIdentity",
           ],
           resources: ["*"],

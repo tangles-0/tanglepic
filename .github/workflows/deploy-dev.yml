@@ -72,8 +72,17 @@ jobs:
       - name: Install CDK dependencies
         run: pnpm infra:cdk:install
 
-      - name: Deploy CDK stacks (dev)
-        run: pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}
+      - name: Deploy CI/CD role stack (dev)
+        run: pnpm --dir infra/cdk exec cdk deploy latex-cicd --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}
+
+      - name: Refresh AWS credentials after CI/CD role update
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy app CDK stacks (dev)
+        run: pnpm --dir infra/cdk exec cdk deploy latex-dev-network latex-dev-data latex-dev-app latex-dev-observability --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}
 
       - name: Run one-off DB migration task
         run: |
