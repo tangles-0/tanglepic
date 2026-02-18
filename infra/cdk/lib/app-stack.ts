@@ -53,10 +53,6 @@ export class AppStack extends cdk.Stack {
       memoryLimitMiB: props.config.memoryMiB,
       taskRole,
       family: `${prefix}-task`,
-      runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.ARM64,
-        operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
-      },
     });
 
     const container = taskDef.addContainer("LatexContainer", {
