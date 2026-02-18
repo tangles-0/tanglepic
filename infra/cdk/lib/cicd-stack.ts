@@ -19,6 +19,7 @@ export class CiCdStack extends cdk.Stack {
     });
 
     const roleResourcePattern = `arn:aws:iam::${this.account}:role/${props.config.appName}-*`;
+    const cdkBootstrapExecutionRolePattern = `arn:aws:iam::${this.account}:role/cdk-*-cfn-exec-role-${this.account}-${props.config.region}`;
 
     const basePolicy = new iam.PolicyDocument({
       statements: [
@@ -53,6 +54,10 @@ export class CiCdStack extends cdk.Stack {
             "iam:UntagRole",
           ],
           resources: [roleResourcePattern],
+        }),
+        new iam.PolicyStatement({
+          actions: ["iam:PassRole", "iam:GetRole"],
+          resources: [cdkBootstrapExecutionRolePattern],
         }),
       ],
     });
