@@ -18,8 +18,8 @@ export class CiCdStack extends cdk.Stack {
       clientIds: ["sts.amazonaws.com"],
     });
 
-    const roleResourcePattern = `arn:aws:iam::${this.account}:role/${props.config.appName}-*`;
-    const cdkBootstrapExecutionRolePattern = `arn:aws:iam::${this.account}:role/cdk-*-cfn-exec-role-${this.account}-${props.config.region}`;
+    const appRoleResourcePattern = `arn:aws:iam::${this.account}:role/${props.config.appName}-*`;
+    const cdkBootstrapRolePattern = `arn:aws:iam::${this.account}:role/cdk-hnb659fds-*`;
 
     const basePolicy = new iam.PolicyDocument({
       statements: [
@@ -37,8 +37,6 @@ export class CiCdStack extends cdk.Stack {
             "kms:*",
             "s3:*",
             "ssm:*",
-            "iam:PassRole",
-            "iam:GetRole",
             "sts:GetCallerIdentity",
           ],
           resources: ["*"],
@@ -55,11 +53,7 @@ export class CiCdStack extends cdk.Stack {
             "iam:TagRole",
             "iam:UntagRole",
           ],
-          resources: [roleResourcePattern],
-        }),
-        new iam.PolicyStatement({
-          actions: ["iam:PassRole", "iam:GetRole"],
-          resources: [cdkBootstrapExecutionRolePattern],
+          resources: [appRoleResourcePattern, cdkBootstrapRolePattern],
         }),
       ],
     });
