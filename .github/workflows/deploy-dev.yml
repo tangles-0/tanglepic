@@ -75,20 +75,7 @@ jobs:
       - name: Deploy CDK stacks (dev)
         run: pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}
 
-      - name: Run one-off DB migration task
-        run: |
-          CLUSTER="latex-dev-cluster"
-          TASK_DEF="$(aws ecs list-task-definitions --family-prefix latex-dev-task --sort DESC --max-items 1 --query 'taskDefinitionArns[0]' --output text || true)"
-          if [ -z "$TASK_DEF" ] || [ "$TASK_DEF" = "None" ]; then
-            echo "Could not resolve task definition for one-off migration"
-            exit 1
-          fi
-          SUBNETS="$(aws ec2 describe-subnets --filters Name=tag:aws-cdk:subnet-name,Values=private-egress Name=vpc-id,Values=$(aws ec2 describe-vpcs --filters Name=tag:Name,Values=latex-dev-vpc --query 'Vpcs[0].VpcId' --output text) --query 'Subnets[].SubnetId' --output text)"
-          SG_ID="$(aws ec2 describe-security-groups --filters Name=group-name,Values=latex-dev-app-sg --query 'SecurityGroups[0].GroupId' --output text)"
-          aws ecs run-task \
-            --cluster "$CLUSTER" \
-            --launch-type FARGATE \
-            --task-definition "$TASK_DEF" \
-            --network-configuration "awsvpcConfiguration={subnets=[$(echo "$SUBNETS" | sed 's/ /,/g')],securityGroups=[$SG_ID],assignPublicIp=DISABLED}" \
-            --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["pnpm","db:migrate:ci"]}]}'
+      - name: Run one-off DB migration task (optional)
+        if: ${{ vars.RUN_DB_PUSH_IN_CI_DEV == 'true' }}
+        run: ./scripts/infra/ecs-run-db-push.sh dev
 
