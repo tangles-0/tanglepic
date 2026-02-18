@@ -97,10 +97,6 @@ export async function storeImageAndThumbnails(
   const smPath = getImagePath(baseName, outputFormat.ext, "sm", uploadedAt);
   const lgPath = getImagePath(baseName, outputFormat.ext, "lg", uploadedAt);
 
-  await fs.mkdir(path.dirname(originalPath), { recursive: true });
-  await fs.mkdir(path.dirname(smPath), { recursive: true });
-  await fs.mkdir(path.dirname(lgPath), { recursive: true });
-
   const image = sharp(buffer, sourceOptions).rotate();
   const metadata = await image.metadata();
   const width = metadata.width ?? 0;
