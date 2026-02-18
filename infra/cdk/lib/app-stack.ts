@@ -108,7 +108,8 @@ export class AppStack extends cdk.Stack {
       loadBalancerName: `${prefix}-alb`,
       vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       dropInvalidHeaderFields: true,
-      deletionProtection: props.config.environment === "prod",
+      // Temporarily disabled to unblock prod stack teardown/recreate during migration setup.
+      deletionProtection: false,
       desyncMitigationMode: elbv2.DesyncMitigationMode.STRICTEST,
     });
 

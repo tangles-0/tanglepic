@@ -37,7 +37,7 @@ const CONFIG_BY_ENV: Record<EnvironmentName, Omit<EnvironmentConfig, "environmen
   },
   prod: {
     ...BASE,
-    appDomain: "pics.latex.gg",
+    appDomain: "pre-prod.pics.latex.gg",
     cpu: 1024,
     memoryMiB: 2048,
     desiredCount: 2,

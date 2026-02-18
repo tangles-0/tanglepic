@@ -12,14 +12,15 @@ type DataStackProps = cdk.StackProps & {
   config: EnvironmentConfig;
   vpc: ec2.IVpc;
   appSecurityGroup: ec2.ISecurityGroup;
+  reuseDataResources?: boolean;
 };
 
 export class DataStack extends cdk.Stack {
-  public readonly imageBucket: s3.Bucket;
+  public readonly imageBucket: s3.IBucket;
   public readonly dbInstance: rds.DatabaseInstance;
   public readonly dbCredentialsSecret: secretsmanager.ISecret;
   public readonly appSecret: secretsmanager.Secret;
-  public readonly rateLimitTable: dynamodb.Table;
+  public readonly rateLimitTable: dynamodb.ITable;
 
   constructor(scope: Construct, id: string, props: DataStackProps) {
     super(scope, id, props);
@@ -31,21 +32,24 @@ export class DataStack extends cdk.Stack {
       enableKeyRotation: true,
     });
 
-    this.imageBucket = new s3.Bucket(this, "ImageBucket", {
-      bucketName: `${prefix}-images-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: dataKey,
-      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
-      enforceSSL: true,
-      versioned: true,
-      lifecycleRules: [
-        {
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-        },
-      ],
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      autoDeleteObjects: false,
-    });
+    const bucketName = `${prefix}-images-${this.account}-${this.region}`;
+    this.imageBucket = props.reuseDataResources
+      ? s3.Bucket.fromBucketName(this, "ImageBucketImported", bucketName)
+      : new s3.Bucket(this, "ImageBucket", {
+          bucketName,
+          encryption: s3.BucketEncryption.KMS,
+          encryptionKey: dataKey,
+          blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+          enforceSSL: true,
+          versioned: true,
+          lifecycleRules: [
+            {
+              noncurrentVersionExpiration: cdk.Duration.days(30),
+            },
+          ],
+          removalPolicy: cdk.RemovalPolicy.RETAIN,
+          autoDeleteObjects: false,
+        });
 
     const dbSecurityGroup = new ec2.SecurityGroup(this, "DbSecurityGroup", {
       vpc: props.vpc,
@@ -78,7 +82,9 @@ export class DataStack extends cdk.Stack {
       multiAz: props.config.dbMultiAz,
       backupRetention: cdk.Duration.days(props.config.dbBackupRetentionDays),
       deleteAutomatedBackups: false,
-      deletionProtection: props.config.environment === "prod",
+      // Temporarily disabled to unblock iterative environment tear-down/recreate during setup.
+      // Re-enable for production hardening once deployments are stable.
+      deletionProtection: false,
       removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
       cloudwatchLogsExports: ["postgresql"],
       cloudwatchLogsRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
@@ -95,22 +101,25 @@ export class DataStack extends cdk.Stack {
       },
     });
 
-    this.rateLimitTable = new dynamodb.Table(this, "RateLimitTable", {
-      tableName: `${prefix}-rate-limit`,
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      partitionKey: {
-        name: "pk",
-        type: dynamodb.AttributeType.STRING,
-      },
-      timeToLiveAttribute: "expiresAt",
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: true,
-      },
-      encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
-      encryptionKey: dataKey,
-      removalPolicy:
-        props.config.environment === "prod" ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
-    });
+    const tableName = `${prefix}-rate-limit`;
+    this.rateLimitTable = props.reuseDataResources
+      ? dynamodb.Table.fromTableName(this, "RateLimitTableImported", tableName)
+      : new dynamodb.Table(this, "RateLimitTable", {
+          tableName,
+          billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+          partitionKey: {
+            name: "pk",
+            type: dynamodb.AttributeType.STRING,
+          },
+          timeToLiveAttribute: "expiresAt",
+          pointInTimeRecoverySpecification: {
+            pointInTimeRecoveryEnabled: true,
+          },
+          encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
+          encryptionKey: dataKey,
+          removalPolicy:
+            props.config.environment === "prod" ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
+        });
   }
 }
 
