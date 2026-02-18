@@ -45,6 +45,9 @@ export type StoredImage = {
 };
 
 export async function ensureUploadDirs(): Promise<void> {
+  if (STORAGE_BACKEND !== "local") {
+    return;
+  }
   await fs.mkdir(UPLOAD_DIR, { recursive: true });
 }
 
