@@ -11,8 +11,7 @@ import { CiCdStack } from "../lib/cicd-stack";
 const app = new cdk.App();
 const envName = app.node.tryGetContext("env") ?? "dev";
 const imageTag = app.node.tryGetContext("imageTag") ?? "latest";
-const certificateArn = app.node.tryGetContext("certificateArn") ?? app.node.tryGetContext("certArn");
-const reuseDataResources = String(app.node.tryGetContext("reuseDataResources") ?? "false") === "true";
+const certificateArn = app.node.tryGetContext("certificateArn");
 const config: EnvironmentConfig = getEnvironmentConfig(envName);
 
 if (!certificateArn) {
@@ -36,7 +35,6 @@ const data = new DataStack(app, `${stackPrefix}-data`, {
   config,
   vpc: network.vpc,
   appSecurityGroup: network.appSecurityGroup,
-  reuseDataResources,
 });
 
 const application = new AppStack(app, `${stackPrefix}-app`, {

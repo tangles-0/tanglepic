@@ -14,8 +14,8 @@
     "infra:cdk:install": "pnpm --dir infra/cdk install",
     "infra:cdk:bootstrap:dev": "./scripts/infra/bootstrap-cdk.sh dev",
     "infra:cdk:bootstrap:prod": "./scripts/infra/bootstrap-cdk.sh prod",
-    "infra:cdk:deploy:dev": "test -n \"$CERT_ARN\" || (echo \"Set CERT_ARN\" && exit 1); pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=dev -c certificateArn=$CERT_ARN",
-    "infra:cdk:deploy:prod": "test -n \"$CERT_ARN\" || (echo \"Set CERT_ARN\" && exit 1); pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=prod -c certificateArn=$CERT_ARN -c reuseDataResources=true",
+    "infra:cdk:deploy:dev": "pnpm --dir infra/cdk deploy:dev",
+    "infra:cdk:deploy:prod": "pnpm --dir infra/cdk deploy:prod",
     "infra:db:push:dev": "./scripts/infra/ecs-run-db-push.sh dev",
     "infra:db:push:prod": "./scripts/infra/ecs-run-db-push.sh prod"
   },

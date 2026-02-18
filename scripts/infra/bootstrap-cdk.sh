@@ -3,7 +3,6 @@ set -euo pipefail
 
 ENVIRONMENT="${1:-dev}"
 REGION="${AWS_REGION:-ap-southeast-2}"
-CERTIFICATE_ARN="${CERT_ARN:-}"
 
 PROFILE_ARGS=()
 if [ -n "${AWS_PROFILE:-}" ]; then
@@ -16,6 +15,6 @@ if [ -z "${ACCOUNT_ID}" ] || [ "${ACCOUNT_ID}" = "None" ]; then
   exit 1
 fi
 
-echo "Bootstrapping env=${ENVIRONMENT} account=${ACCOUNT_ID} region=${REGION} certificateArn=${CERTIFICATE_ARN}"
-pnpm --dir infra/cdk exec cdk bootstrap "aws://${ACCOUNT_ID}/${REGION}" -c env="${ENVIRONMENT}" -c certificateArn="${CERTIFICATE_ARN}" "${PROFILE_ARGS[@]}"
+echo "Bootstrapping env=${ENVIRONMENT} account=${ACCOUNT_ID} region=${REGION}"
+pnpm --dir infra/cdk exec cdk bootstrap "aws://${ACCOUNT_ID}/${REGION}" -c env="${ENVIRONMENT}" "${PROFILE_ARGS[@]}"
 
