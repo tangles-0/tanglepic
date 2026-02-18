@@ -6,15 +6,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { isDatabaseUnavailableError } from "@/lib/db-errors";
-
-type LoginAttempt = {
-  count: number;
-  resetAt: number;
-};
-
-const loginAttempts = new Map<string, LoginAttempt>();
-const LOGIN_WINDOW_MS = 5 * 60 * 1000;
-const LOGIN_MAX_ATTEMPTS = 20;
+import { checkLoginRateLimit, resetLoginRateLimit } from "@/lib/rate-limit";
 
 type RequestHeaders =
   | Headers
@@ -35,24 +27,16 @@ function readHeader(headers: RequestHeaders | undefined, key: string): string | 
 }
 
 function getClientKey(request: RequestLike | undefined): string {
-  const forwarded = readHeader(request?.headers, "x-forwarded-for")?.split(",")[0]?.trim();
+  const forwardedChain = readHeader(request?.headers, "x-forwarded-for")
+    ?.split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  // Behind ALB/reverse proxies we trust the most recently appended hop.
+  // ALB appends the immediate peer to the right-most side of x-forwarded-for.
+  // Trusting the first hop allows clients to spoof a custom value and bypass IP-based rate limits.
+  const forwarded = forwardedChain?.[forwardedChain.length - 1];
   const ip = forwarded || readHeader(request?.headers, "x-real-ip") || "unknown";
   return ip;
-}
-
-function checkLoginRateLimit(key: string): boolean {
-  const now = Date.now();
-  const entry = loginAttempts.get(key);
-  if (!entry || entry.resetAt <= now) {
-    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
-    return true;
-  }
-  entry.count += 1;
-  return entry.count <= LOGIN_MAX_ATTEMPTS;
-}
-
-function resetLoginRateLimit(key: string): void {
-  loginAttempts.delete(key);
 }
 
 async function userExists(userId: string): Promise<boolean> {
@@ -85,7 +69,7 @@ export const authOptions: NextAuthOptions = {
         }
 
         const key = getClientKey(request);
-        if (!checkLoginRateLimit(key)) {
+        if (!(await checkLoginRateLimit(key))) {
           return null;
         }
 
@@ -104,7 +88,7 @@ export const authOptions: NextAuthOptions = {
           return null;
         }
 
-        resetLoginRateLimit(key);
+        await resetLoginRateLimit(key);
         return { id: user.id, email: user.email };
       },
     }),

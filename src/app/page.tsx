@@ -35,7 +35,7 @@ export default async function Home() {
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-4 px-6 py-2 sm:py-10 text-sm">
       <header className="space-y-2">
         <div className="relative">
-          <h1 className="text-2xl font-semibold mt-1">latex <span className="font-medium text-neutral-500">img_srv</span></h1>
+          <h1 className="text-2xl font-semibold mt-1">latex <span className="font-medium text-neutral-500">img_srv (dev)</span></h1>
           <div className="absolute top-[-15px] left-[-22px]">
             <img src="/latex-logo.png" alt="latex" width="32px" className="latex-logo z-5" />
           </div>

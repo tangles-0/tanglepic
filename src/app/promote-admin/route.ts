@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth";
 import { countAdminUsers, promoteUserToAdmin } from "@/lib/metadata-store";
+import { hasTrustedOrigin } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
-export async function GET(request: Request): Promise<NextResponse> {
+export async function POST(request: Request): Promise<NextResponse> {
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const bootstrapToken = process.env.ADMIN_BOOTSTRAP_TOKEN?.trim();
+  const providedToken = new URL(request.url).searchParams.get("token")?.trim();
+  if (!bootstrapToken || !providedToken || providedToken !== bootstrapToken) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
+  if (!hasTrustedOrigin(request)) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
   const adminCount = await countAdminUsers();
@@ -28,3 +39,6 @@ export async function GET(request: Request): Promise<NextResponse> {
   return NextResponse.json({ ok: true });
 }
 
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json({ error: "Method not allowed." }, { status: 405 });
+}
