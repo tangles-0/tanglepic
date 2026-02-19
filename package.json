@@ -25,7 +25,9 @@
     "infra:deploy:dev:app": "bash ./scripts/infra/deploy-app.sh dev",
     "infra:deploy:prod:app": "bash ./scripts/infra/deploy-app.sh prod",
     "infra:deploy:dev:db-migrate": "bash ./scripts/infra/deploy-db-migrate.sh dev",
-    "infra:deploy:prod:db-migrate": "bash ./scripts/infra/deploy-db-migrate.sh prod"
+    "infra:deploy:prod:db-migrate": "bash ./scripts/infra/deploy-db-migrate.sh prod",
+    "infra:promote-admin:dev": "bash ./scripts/infra/promote-admin.sh https://dev.pics.latex.gg",
+    "infra:promote-admin:prod": "bash ./scripts/infra/promote-admin.sh https://pre-prod.pics.latex.gg"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.969.0",
