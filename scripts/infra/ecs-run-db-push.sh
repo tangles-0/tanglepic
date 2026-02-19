@@ -16,60 +16,72 @@ if [[ -n "$AWS_PROFILE" ]]; then
 fi
 
 CLUSTER="latex-${ENVIRONMENT}-cluster"
-VPC_NAME="latex-${ENVIRONMENT}-vpc"
-APP_SG_NAME="latex-${ENVIRONMENT}-app-sg"
-TASK_FAMILY_PREFIX="latex-${ENVIRONMENT}-task"
+SERVICE="latex-${ENVIRONMENT}-svc"
 
-echo "Resolving latest task definition for ${TASK_FAMILY_PREFIX}..."
-TASK_DEF=$(aws ecs list-task-definitions \
+echo "Resolving ECS service configuration from ${CLUSTER}/${SERVICE}..."
+SERVICE_STATUS=$(aws ecs describe-services \
   --region "$AWS_REGION" \
   "${PROFILE_ARGS[@]}" \
-  --family-prefix "$TASK_FAMILY_PREFIX" \
-  --sort DESC \
-  --max-items 1 \
-  --query 'taskDefinitionArns[0]' \
+  --cluster "$CLUSTER" \
+  --services "$SERVICE" \
+  --query 'services[0].status' \
+  --output text 2>/dev/null || true)
+
+if [[ -z "$SERVICE_STATUS" || "$SERVICE_STATUS" == "None" ]]; then
+  echo "ECS service ${SERVICE} was not found in cluster ${CLUSTER}." >&2
+  echo "Deploy app stack first, e.g. pnpm infra:deploy:${ENVIRONMENT}:app" >&2
+  exit 1
+fi
+
+TASK_DEF=$(aws ecs describe-services \
+  --region "$AWS_REGION" \
+  "${PROFILE_ARGS[@]}" \
+  --cluster "$CLUSTER" \
+  --services "$SERVICE" \
+  --query 'services[0].taskDefinition' \
   --output text)
 
 if [[ -z "$TASK_DEF" || "$TASK_DEF" == "None" ]]; then
-  echo "Unable to resolve task definition for ${TASK_FAMILY_PREFIX}" >&2
+  echo "Unable to resolve task definition from ECS service ${SERVICE}" >&2
   exit 1
 fi
 
-echo "Resolving VPC/subnets/security group for ${ENVIRONMENT}..."
-VPC_ID=$(aws ec2 describe-vpcs \
+SUBNETS=$(aws ecs describe-services \
   --region "$AWS_REGION" \
   "${PROFILE_ARGS[@]}" \
-  --filters "Name=tag:Name,Values=${VPC_NAME}" \
-  --query 'Vpcs[0].VpcId' \
-  --output text)
-
-if [[ -z "$VPC_ID" || "$VPC_ID" == "None" ]]; then
-  echo "Unable to resolve VPC named ${VPC_NAME}" >&2
-  exit 1
-fi
-
-SUBNETS=$(aws ec2 describe-subnets \
-  --region "$AWS_REGION" \
-  "${PROFILE_ARGS[@]}" \
-  --filters "Name=vpc-id,Values=${VPC_ID}" "Name=tag:aws-cdk:subnet-name,Values=private-egress" \
-  --query 'Subnets[].SubnetId' \
+  --cluster "$CLUSTER" \
+  --services "$SERVICE" \
+  --query 'services[0].networkConfiguration.awsvpcConfiguration.subnets' \
   --output text | sed 's/[[:space:]]\+/,/g')
 
-if [[ -z "$SUBNETS" ]]; then
-  echo "Unable to resolve private-egress subnets in ${VPC_ID}" >&2
+SECURITY_GROUPS=$(aws ecs describe-services \
+  --region "$AWS_REGION" \
+  "${PROFILE_ARGS[@]}" \
+  --cluster "$CLUSTER" \
+  --services "$SERVICE" \
+  --query 'services[0].networkConfiguration.awsvpcConfiguration.securityGroups' \
+  --output text | sed 's/[[:space:]]\+/,/g')
+
+ASSIGN_PUBLIC_IP=$(aws ecs describe-services \
+  --region "$AWS_REGION" \
+  "${PROFILE_ARGS[@]}" \
+  --cluster "$CLUSTER" \
+  --services "$SERVICE" \
+  --query 'services[0].networkConfiguration.awsvpcConfiguration.assignPublicIp' \
+  --output text)
+
+if [[ -z "$SUBNETS" || "$SUBNETS" == "None" ]]; then
+  echo "Unable to resolve awsvpc subnets from ECS service ${SERVICE}" >&2
   exit 1
 fi
 
-SG_ID=$(aws ec2 describe-security-groups \
-  --region "$AWS_REGION" \
-  "${PROFILE_ARGS[@]}" \
-  --filters "Name=group-name,Values=${APP_SG_NAME}" \
-  --query 'SecurityGroups[0].GroupId' \
-  --output text)
-
-if [[ -z "$SG_ID" || "$SG_ID" == "None" ]]; then
-  echo "Unable to resolve security group ${APP_SG_NAME}" >&2
+if [[ -z "$SECURITY_GROUPS" || "$SECURITY_GROUPS" == "None" ]]; then
+  echo "Unable to resolve awsvpc security groups from ECS service ${SERVICE}" >&2
   exit 1
+fi
+
+if [[ -z "$ASSIGN_PUBLIC_IP" || "$ASSIGN_PUBLIC_IP" == "None" ]]; then
+  ASSIGN_PUBLIC_IP="DISABLED"
 fi
 
 echo "Starting one-off migration task in ${CLUSTER}..."
@@ -79,8 +91,8 @@ TASK_ARN=$(aws ecs run-task \
   --cluster "$CLUSTER" \
   --launch-type FARGATE \
   --task-definition "$TASK_DEF" \
-  --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG_ID],assignPublicIp=DISABLED}" \
-  --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["pnpm","db:push"]}]}' \
+  --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=${ASSIGN_PUBLIC_IP}}" \
+  --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["./node_modules/.bin/drizzle-kit","push","--config","./drizzle.config.ts"]}]}' \
   --query 'tasks[0].taskArn' \
   --output text)
 

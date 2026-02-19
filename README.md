@@ -26,6 +26,11 @@ _Also for videos and other files (later)_
 ## AWS Infrastructure and Deploy
 
 - CDK app: `infra/cdk`
+- New one-command flows (idempotent):
+  - `pnpm infra:deploy:dev:app`
+  - `pnpm infra:deploy:prod:app`
+  - `pnpm infra:deploy:dev:db-migrate`
+  - `pnpm infra:deploy:prod:db-migrate`
 - Dev deploy:
   - `pnpm infra:cdk:install`
   - `aws sts get-caller-identity` (or set `AWS_PROFILE=latex-admin`)

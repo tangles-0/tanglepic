@@ -11,6 +11,7 @@ import { CiCdStack } from "../lib/cicd-stack";
 const app = new cdk.App();
 const envName = app.node.tryGetContext("env") ?? "dev";
 const imageTag = app.node.tryGetContext("imageTag") ?? "latest";
+const desiredCountFromContext = app.node.tryGetContext("desiredCount");
 const certificateArnFromContext = app.node.tryGetContext("certificateArn");
 const certificateArnFromLegacyContext = app.node.tryGetContext("certArn");
 const certificateArnFromEnv =
@@ -26,6 +27,12 @@ const certificateArn = (
   ""
 ).trim();
 const config: EnvironmentConfig = getEnvironmentConfig(envName);
+const desiredCountOverride =
+  desiredCountFromContext === undefined ? undefined : Number.parseInt(String(desiredCountFromContext), 10);
+
+if (desiredCountOverride !== undefined && (!Number.isFinite(desiredCountOverride) || desiredCountOverride < 0)) {
+  throw new Error("Invalid desiredCount context. Use a non-negative integer, e.g. -c desiredCount=0");
+}
 
 if (!certificateArn) {
   throw new Error(
@@ -82,6 +89,7 @@ const application = new AppStack(app, `${stackPrefix}-app`, {
   rateLimitTable: data.rateLimitTable,
   imageTag,
   certificateArn,
+  desiredCountOverride,
 });
 application.addDependency(network);
 application.addDependency(data);

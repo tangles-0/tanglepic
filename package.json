@@ -21,7 +21,11 @@
     "infra:image:push:dev": "./scripts/infra/build-and-push-image.sh dev",
     "infra:image:push:prod": "./scripts/infra/build-and-push-image.sh prod",
     "infra:db:push:dev": "./scripts/infra/ecs-run-db-push.sh dev",
-    "infra:db:push:prod": "./scripts/infra/ecs-run-db-push.sh prod"
+    "infra:db:push:prod": "./scripts/infra/ecs-run-db-push.sh prod",
+    "infra:deploy:dev:app": "bash ./scripts/infra/deploy-app.sh dev",
+    "infra:deploy:prod:app": "bash ./scripts/infra/deploy-app.sh prod",
+    "infra:deploy:dev:db-migrate": "bash ./scripts/infra/deploy-db-migrate.sh dev",
+    "infra:deploy:prod:db-migrate": "bash ./scripts/infra/deploy-db-migrate.sh prod"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.969.0",

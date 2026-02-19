@@ -30,14 +30,15 @@ REPOSITORY="latex-${ENVIRONMENT}-app"
 REGISTRY="${ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
 IMAGE_URI="${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}"
 
-echo "Checking ECR repository: ${REPOSITORY}"
+echo "Ensuring ECR repository exists: ${REPOSITORY}"
 if ! aws ecr describe-repositories \
   --region "$AWS_REGION" \
   "${PROFILE_ARGS[@]}" \
   --repository-names "$REPOSITORY" >/dev/null 2>&1; then
-  echo "ECR repository ${REPOSITORY} was not found in ${AWS_REGION}." >&2
-  echo "Run full infra deploy first: pnpm infra:cdk:deploy:all:${ENVIRONMENT}" >&2
-  exit 1
+  aws ecr create-repository \
+    --region "$AWS_REGION" \
+    "${PROFILE_ARGS[@]}" \
+    --repository-name "$REPOSITORY" >/dev/null
 fi
 
 echo "Logging into ECR registry: ${REGISTRY}"

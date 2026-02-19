@@ -25,6 +25,7 @@ type AppStackProps = cdk.StackProps & {
   rateLimitTable: dynamodb.ITable;
   imageTag: string;
   certificateArn: string;
+  desiredCountOverride?: number;
 };
 
 export class AppStack extends cdk.Stack {
@@ -91,7 +92,7 @@ export class AppStack extends cdk.Stack {
       cluster: props.cluster,
       taskDefinition: taskDef,
       serviceName: `${prefix}-svc`,
-      desiredCount: props.config.desiredCount,
+      desiredCount: props.desiredCountOverride ?? props.config.desiredCount,
       securityGroups: [props.appSecurityGroup],
       assignPublicIp: false,
       vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
