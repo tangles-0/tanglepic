@@ -16,6 +16,10 @@
     "infra:cdk:bootstrap:prod": "./scripts/infra/bootstrap-cdk.sh prod",
     "infra:cdk:deploy:dev": "pnpm --dir infra/cdk deploy:dev",
     "infra:cdk:deploy:prod": "pnpm --dir infra/cdk deploy:prod",
+    "infra:cdk:deploy:all:dev": "pnpm --dir infra/cdk deploy:all:dev",
+    "infra:cdk:deploy:all:prod": "pnpm --dir infra/cdk deploy:all:prod",
+    "infra:image:push:dev": "./scripts/infra/build-and-push-image.sh dev",
+    "infra:image:push:prod": "./scripts/infra/build-and-push-image.sh prod",
     "infra:db:push:dev": "./scripts/infra/ecs-run-db-push.sh dev",
     "infra:db:push:prod": "./scripts/infra/ecs-run-db-push.sh prod"
   },

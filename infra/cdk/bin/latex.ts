@@ -11,12 +11,43 @@ import { CiCdStack } from "../lib/cicd-stack";
 const app = new cdk.App();
 const envName = app.node.tryGetContext("env") ?? "dev";
 const imageTag = app.node.tryGetContext("imageTag") ?? "latest";
-const certificateArn = app.node.tryGetContext("certificateArn");
+const certificateArnFromContext = app.node.tryGetContext("certificateArn");
+const certificateArnFromLegacyContext = app.node.tryGetContext("certArn");
+const certificateArnFromEnv =
+  process.env.CERT_ARN ??
+  process.env.CERTIFICATE_ARN ??
+  process.env.ACM_CERTIFICATE_ARN ??
+  process.env.CDK_CERTIFICATE_ARN;
+
+const certificateArn = (
+  certificateArnFromContext ??
+  certificateArnFromLegacyContext ??
+  certificateArnFromEnv ??
+  ""
+).trim();
 const config: EnvironmentConfig = getEnvironmentConfig(envName);
 
 if (!certificateArn) {
-  throw new Error("Missing context 'certificateArn'. Example: -c certificateArn=arn:aws:acm:...");
+  throw new Error(
+    [
+      "Missing certificate ARN.",
+      "Provide one of:",
+      "- CDK context: -c certificateArn=arn:aws:acm:REGION:ACCOUNT:certificate/ID",
+      "- Env var: CERT_ARN=arn:aws:acm:REGION:ACCOUNT:certificate/ID",
+      "",
+      "Note: older deployments may have used the legacy context key 'certArn'.",
+    ].join("\n"),
+  );
 }
+
+if (!certificateArnFromContext && certificateArnFromLegacyContext) {
+  // eslint-disable-next-line no-console
+  console.warn(
+    "Warning: using legacy CDK context key 'certArn'. Please migrate to '-c certificateArn=...'.",
+  );
+}
+
+console.log("Using container image: ", imageTag);
 
 const stackEnv: cdk.Environment = {
   account: process.env.CDK_DEFAULT_ACCOUNT,

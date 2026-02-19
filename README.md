@@ -30,11 +30,15 @@ _Also for videos and other files (later)_
   - `pnpm infra:cdk:install`
   - `aws sts get-caller-identity` (or set `AWS_PROFILE=latex-admin`)
   - `pnpm infra:cdk:bootstrap:dev`
-  - `pnpm infra:cdk:deploy:dev`
+  - `pnpm infra:cdk:deploy:all:dev` (first-time/full infra)
+  - `pnpm infra:image:push:dev` (build and push app image tag)
+  - `pnpm infra:cdk:deploy:dev` (app/runtime update only)
   - `pnpm infra:db:push:dev` (run schema push in one-off ECS task)
 - Prod deploy:
   - `pnpm infra:cdk:bootstrap:prod`
-  - `pnpm infra:cdk:deploy:prod`
+  - `pnpm infra:cdk:deploy:all:prod` (first-time/full infra)
+  - `pnpm infra:image:push:prod` (build and push app image tag)
+  - `pnpm infra:cdk:deploy:prod` (app/runtime update only)
   - `pnpm infra:db:push:prod`
 
 ## Ops Docs
