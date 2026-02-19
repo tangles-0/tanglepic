@@ -78,6 +78,7 @@ export class AppStack extends cdk.Stack {
       },
       secrets: {
         NEXTAUTH_SECRET: ecs.Secret.fromSecretsManager(props.appSecret, "NEXTAUTH_SECRET"),
+        ADMIN_BOOTSTRAP_TOKEN: ecs.Secret.fromSecretsManager(props.appSecret, "ADMIN_BOOTSTRAP_TOKEN"),
         PGUSER: ecs.Secret.fromSecretsManager(props.dbCredentialsSecret, "username"),
         PGPASSWORD: ecs.Secret.fromSecretsManager(props.dbCredentialsSecret, "password"),
       },

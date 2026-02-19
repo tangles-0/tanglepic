@@ -5,6 +5,7 @@ APP_BASE_URL="${1:-${APP_BASE_URL:-}}"
 BOOTSTRAP_TOKEN="${2:-${ADMIN_BOOTSTRAP_TOKEN:-}}"
 SESSION_TOKEN="${3:-${NEXTAUTH_SESSION_TOKEN:-}}"
 COOKIE_NAME="${NEXTAUTH_COOKIE_NAME:-__Secure-next-auth.session-token}"
+CURL_INSECURE="${CURL_INSECURE:-false}"
 
 if [[ -z "$APP_BASE_URL" ]]; then
   echo "Usage: $0 <app-base-url> [bootstrap-token] [nextauth-session-token]" >&2
@@ -26,9 +27,15 @@ fi
 APP_BASE_URL="${APP_BASE_URL%/}"
 PROMOTE_URL="${APP_BASE_URL}/promote-admin?token=${BOOTSTRAP_TOKEN}"
 COOKIE_HEADER="${COOKIE_NAME}=${SESSION_TOKEN}"
+INSECURE_ARGS=()
+if [[ "$CURL_INSECURE" == "true" ]]; then
+  INSECURE_ARGS=(-k)
+  echo "Warning: CURL_INSECURE=true (TLS certificate verification disabled)" >&2
+fi
 
 echo "Calling promote-admin on ${APP_BASE_URL}..."
 RESPONSE="$(curl -sS -X POST "$PROMOTE_URL" \
+  "${INSECURE_ARGS[@]}" \
   -H "Origin: ${APP_BASE_URL}" \
   -H "Cookie: ${COOKIE_HEADER}" \
   -H "Accept: application/json" \
