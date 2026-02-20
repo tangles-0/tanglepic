@@ -8,6 +8,8 @@ import { isAdminUser } from "@/lib/metadata-store";
 
 export const runtime = "nodejs";
 
+const IS_ENABLED = false;
+
 const MAX_DUMP_BYTES = 1024 * 1024 * 1024;
 const s3Region = process.env.S3_REGION;
 const s3Endpoint = process.env.S3_ENDPOINT;
@@ -22,6 +24,10 @@ const s3Client =
     : null;
 
 export async function POST(request: Request): Promise<NextResponse> {
+  if (!IS_ENABLED) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 });
+  }
+
   const userId = await getSessionUserId();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
