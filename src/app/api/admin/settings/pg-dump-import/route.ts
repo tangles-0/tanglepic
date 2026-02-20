@@ -1,14 +1,25 @@
 import { NextResponse } from "next/server";
 import { spawn } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { once } from "node:events";
+import { extname } from "node:path";
+import { GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSessionUserId } from "@/lib/auth";
 import { isAdminUser } from "@/lib/metadata-store";
 
 export const runtime = "nodejs";
 
 const MAX_DUMP_BYTES = 1024 * 1024 * 1024;
+const s3Region = process.env.S3_REGION;
+const s3Endpoint = process.env.S3_ENDPOINT;
+const s3Bucket = process.env.S3_BUCKET;
+const s3Client =
+  s3Region && s3Bucket
+    ? new S3Client({
+        region: s3Region,
+        endpoint: s3Endpoint,
+        forcePathStyle: Boolean(s3Endpoint),
+      })
+    : null;
 
 export async function POST(request: Request): Promise<NextResponse> {
   const userId = await getSessionUserId();
@@ -26,58 +37,73 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Database is not configured." }, { status: 500 });
   }
 
-  const formData = await request.formData();
-  const file = formData.get("dump");
-  if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Upload a dump file." }, { status: 400 });
-  }
-  if (file.size <= 0) {
-    return NextResponse.json({ error: "Dump file is empty." }, { status: 400 });
-  }
-  if (file.size > MAX_DUMP_BYTES) {
-    return NextResponse.json(
-      { error: "Dump file is too large (max 1 GB)." },
-      { status: 400 },
-    );
-  }
+  let sourceKind: "sql" | "dump" = "sql";
+  let sourceStream: AsyncIterable<Uint8Array> | null = null;
+  const contentType = request.headers.get("content-type") ?? "";
 
-  const originalName = file.name || "upload.sql";
-  const extension = extname(originalName).toLowerCase();
-  const uploadKind = extension === ".dump" ? "dump" : "sql";
-  const tempDir = await mkdtemp(join(tmpdir(), "tanglepic-import-"));
-  const tempFilePath = join(tempDir, `upload${uploadKind === "dump" ? ".dump" : ".sql"}`);
+  if (contentType.includes("application/json")) {
+    const payload = (await request.json()) as { s3Key?: string };
+    const s3Key = payload.s3Key?.trim();
+    if (!s3Key) {
+      return NextResponse.json({ error: "Provide an S3 object key." }, { status: 400 });
+    }
+    sourceKind = extname(s3Key).toLowerCase() === ".dump" ? "dump" : "sql";
+    sourceStream = await getS3ObjectStream(s3Key);
+  } else {
+    const formData = await request.formData();
+    const file = formData.get("dump");
+    const s3Key = formData.get("s3Key");
+
+    if (file instanceof File) {
+      if (file.size <= 0) {
+        return NextResponse.json({ error: "Dump file is empty." }, { status: 400 });
+      }
+      if (file.size > MAX_DUMP_BYTES) {
+        return NextResponse.json(
+          { error: "Dump file is too large (max 1 GB)." },
+          { status: 400 },
+        );
+      }
+      sourceKind = extname(file.name || "upload.sql").toLowerCase() === ".dump" ? "dump" : "sql";
+      sourceStream = streamFileChunks(file);
+    } else if (typeof s3Key === "string" && s3Key.trim()) {
+      const trimmedKey = s3Key.trim();
+      sourceKind = extname(trimmedKey).toLowerCase() === ".dump" ? "dump" : "sql";
+      sourceStream = await getS3ObjectStream(trimmedKey);
+    } else {
+      return NextResponse.json(
+        { error: "Upload a .sql/.dump file or provide an S3 object key." },
+        { status: 400 },
+      );
+    }
+  }
 
   try {
-    const bytes = Buffer.from(await file.arrayBuffer());
-    await writeFile(tempFilePath, bytes);
-
-    if (uploadKind === "dump") {
-      await runCommand("pg_restore", [
+    if (!sourceStream) {
+      return NextResponse.json({ error: "No import source found." }, { status: 400 });
+    }
+    if (sourceKind === "dump") {
+      await runCommandWithInput("pg_restore", [
         "--clean",
         "--if-exists",
         "--no-owner",
         "--no-privileges",
         "--dbname",
         connectionString,
-        tempFilePath,
-      ]);
+      ], sourceStream);
     } else {
-      await runCommand("psql", [
+      await runCommandWithInput("psql", [
         "--set",
         "ON_ERROR_STOP=1",
         "--dbname",
         connectionString,
-        "--file",
-        tempFilePath,
-      ]);
+      ], sourceStream);
     }
 
     return NextResponse.json({ message: "Dump import completed." });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Dump import failed.";
     return NextResponse.json({ error: message }, { status: 400 });
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
   }
 }
 
@@ -96,10 +122,30 @@ function resolveConnectionString(): string | undefined {
   return process.env.DATABASE_URL;
 }
 
-function runCommand(command: string, args: string[]): Promise<void> {
+async function getS3ObjectStream(key: string): Promise<AsyncIterable<Uint8Array>> {
+  if (!s3Client || !s3Bucket) {
+    throw new Error("S3 is not configured.");
+  }
+  const response = await s3Client.send(
+    new GetObjectCommand({
+      Bucket: s3Bucket,
+      Key: key,
+    }),
+  );
+  if (!response.Body) {
+    throw new Error("S3 object is empty.");
+  }
+  return response.Body as AsyncIterable<Uint8Array>;
+}
+
+function runCommandWithInput(
+  command: string,
+  args: string[],
+  input: AsyncIterable<Uint8Array>,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     });
 
     let stderr = "";
@@ -115,6 +161,25 @@ function runCommand(command: string, args: string[]): Promise<void> {
       reject(error);
     });
 
+    const feedInput = async () => {
+      if (!child.stdin) {
+        throw new Error(`${command} stdin is not available.`);
+      }
+      for await (const chunk of input) {
+        if (!child.stdin.write(chunk)) {
+          await once(child.stdin, "drain");
+        }
+      }
+      child.stdin.end();
+    };
+
+    void feedInput().catch((error) => {
+      if (!child.killed) {
+        child.kill("SIGTERM");
+      }
+      reject(error);
+    });
+
     child.on("close", (code) => {
       if (code === 0) {
         resolve();
@@ -124,4 +189,21 @@ function runCommand(command: string, args: string[]): Promise<void> {
       reject(new Error(details || `${command} failed with exit code ${code ?? "unknown"}.`));
     });
   });
+}
+
+async function* streamFileChunks(file: File): AsyncIterable<Uint8Array> {
+  const reader = file.stream().getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) {
+        break;
+      }
+      if (value) {
+        yield value;
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }

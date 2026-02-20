@@ -9,13 +9,15 @@ type ImportResponse = {
 
 export default function AdminPgDumpImport() {
   const [file, setFile] = useState<File | null>(null);
+  const [s3Key, setS3Key] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   async function runImport() {
-    if (!file) {
-      setError("Choose a .sql or .dump file first.");
+    const trimmedKey = s3Key.trim();
+    if (!file && !trimmedKey) {
+      setError("Choose a .sql/.dump file or enter an S3 object key.");
       return;
     }
 
@@ -23,12 +25,24 @@ export default function AdminPgDumpImport() {
     setMessage(null);
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append("dump", file);
-      const response = await fetch("/api/admin/settings/pg-dump-import", {
-        method: "POST",
-        body: formData,
-      });
+      const response = file
+        ? await (async () => {
+            const formData = new FormData();
+            formData.append("dump", file);
+            if (trimmedKey) {
+              formData.append("s3Key", trimmedKey);
+            }
+            return fetch("/api/admin/settings/pg-dump-import", {
+              method: "POST",
+              body: formData,
+            });
+          })()
+        : await fetch("/api/admin/settings/pg-dump-import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ s3Key: trimmedKey }),
+          });
+
       const payload = (await response.json()) as ImportResponse;
       if (!response.ok) {
         setError(payload.error ?? "Import failed.");
@@ -50,7 +64,17 @@ export default function AdminPgDumpImport() {
         against the current database.
       </p>
       <label className="flex flex-col gap-2 text-xs">
-        Dump file
+        S3 object key (optional)
+        <input
+          type="text"
+          placeholder="migration-artifacts/latex-20260219T141457Z.dump"
+          value={s3Key}
+          onChange={(event) => setS3Key(event.target.value)}
+          className="rounded border px-3 py-2 text-xs"
+        />
+      </label>
+      <label className="flex flex-col gap-2 text-xs">
+        Dump file (optional)
         <input
           type="file"
           accept=".sql,.dump,text/sql,application/sql,application/octet-stream"
