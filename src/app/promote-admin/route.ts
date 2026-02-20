@@ -5,9 +5,19 @@ import { hasTrustedOrigin } from "@/lib/request-security";
 
 export const runtime = "nodejs";
 
+// only use this for local development to bypass checks
+// export async function GET(request: Request): Promise<NextResponse> {
+//   const userId = await getSessionUserId();
+//   console.log("USER ID IS", userId);
+//   console.log("Nextauth session token is", request.headers.get("Cookie"));
+//   await promoteUserToAdmin(userId ?? "");
+//   return NextResponse.json({ ok: true });
+// }
+
 export async function POST(request: Request): Promise<NextResponse> {
   const userId = await getSessionUserId();
   if (!userId) {
+    console.log("USER ID IS NOT FOUND");
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 
