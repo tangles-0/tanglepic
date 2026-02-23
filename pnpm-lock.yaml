@@ -98,6 +98,9 @@ importers:
       dotenv:
         specifier: ^17.2.3
         version: 17.2.4
+      drizzle-kit:
+        specifier: ^0.31.8
+        version: 0.31.9
       drizzle-orm:
         specifier: ^0.45.1
         version: 0.45.1(@neondatabase/serverless@1.0.2)(@types/pg@8.16.0)(postgres@3.4.8)
@@ -168,9 +171,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.0
         version: 19.2.3(@types/react@19.2.13)
-      drizzle-kit:
-        specifier: ^0.31.8
-        version: 0.31.9
       eslint:
         specifier: ^9.37.0
         version: 9.39.2(jiti@1.21.7)

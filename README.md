@@ -1,27 +1,58 @@
 # LATEX
 
-### cloud app for self-hosting and sharing images
-
-_Also for videos and other files (later)_
+### cloud app for self-hosting and sharing images, videos, audio, documents, and archives
 
 ---
 
 ### Storage backends supported:
 
-- Local disk (default)
+- Local disk
   - .env: `STORAGE_BACKEND=local`
   - Files stored under `data/uploads/...`
-- Amazon S3
+- Amazon AWS S3
   - .env: `STORAGE_BACKEND=s3`
   - .env: `S3_BUCKET=your-bucket`
   - .env: `S3_REGION=us-east-1`
-  - Optional: `S3_ENDPOINT=https://s3.your-provider.com` for S3-compatible storage
+  - Optional: `S3_ENDPOINT=https://s3.your-provider.com` for S3-compatible storage provider
 
 ## Installation
 
+### Environment prep - local
+
+Copy `.env.example` to eg. `.env.local`
+
+The DATABASE_URL value will refer to localhost (or the address of a PostgreSQL db server on your network): `postgresql://latex:latex@localhost:5432/latex`
+
+For docker, swap out the hostname for the db container name: `postgresql://latex:latex@latex-db:5432/latex`
+
+For simplicity I create an `.env.local.docker`
+
 ### Docker
 
-`docker compose up -d`
+⚠️ (optional) To simplify setup, you can create `docker-compose.override.yml` in the project root and populate with the below:
+
+```
+networks:
+  proxy:
+    external: true
+
+services:
+  db:
+    ports:
+      - "5432:5432"
+    networks:
+      - proxy
+```
+
+⚠️ This enables access to the database server outside of docker engine's internal network, which is required for the dev app (`pnpm dev`) to connect to it. It also enables you to use `pnpm db:push` to populate the tables.
+
+To get started, run `docker compose up -d db` to start the database server only, then run `pnpm db:push` to create the tables
+
+Then run `docker compose --env-file .env.local.docker up -d app` to start the app container.
+
+### Node / PM2
+
+To run the app directly without docker, correctly set your 
 
 ## AWS Infrastructure and Deploy
 
