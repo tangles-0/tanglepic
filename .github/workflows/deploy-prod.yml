@@ -87,7 +87,3 @@ jobs:
       - name: Deploy CDK stacks (prod)
         run: pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=prod -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_PROD }}
 
-      - name: Run one-off DB migration task (optional)
-        if: ${{ vars.RUN_DB_PUSH_IN_CI_PROD == 'true' }}
-        run: ./scripts/infra/ecs-run-db-push.sh prod
-

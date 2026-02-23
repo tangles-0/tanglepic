@@ -23,15 +23,42 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 function runDrizzlePush(): Promise<{ stdout: string; stderr: string }> {
+  const localDrizzleKitPath = `${process.cwd()}/node_modules/.bin/drizzle-kit`;
+  const baseEnv = {
+    ...process.env,
+    HOME: process.env.HOME ?? "/tmp",
+    XDG_CACHE_HOME: process.env.XDG_CACHE_HOME ?? "/tmp/.cache",
+    COREPACK_HOME: process.env.COREPACK_HOME ?? "/tmp/.cache/node/corepack",
+  };
+
+  const attempts: Array<{ command: string; args: string[] }> = [
+    {
+      command: localDrizzleKitPath,
+      args: ["push", "--config", "./drizzle.config.ts"],
+    },
+    {
+      command: "pnpm",
+      args: ["exec", "drizzle-kit", "push", "--config", "./drizzle.config.ts"],
+    },
+  ];
+
+  return runWithFallback(attempts, baseEnv);
+}
+
+function runWithFallback(
+  attempts: Array<{ command: string; args: string[] }>,
+  env: NodeJS.ProcessEnv,
+): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      "pnpm",
-      ["exec", "drizzle-kit", "push", "--config", "./drizzle.config.ts"],
-      {
-        cwd: process.cwd(),
-        env: process.env,
-      },
-    );
+    const current = attempts[0];
+    if (!current) {
+      reject(new Error("No drizzle-kit command was available in this runtime."));
+      return;
+    }
+    const child = spawn(current.command, current.args, {
+      cwd: process.cwd(),
+      env,
+    });
 
     let stdout = "";
     let stderr = "";
@@ -46,7 +73,7 @@ function runDrizzlePush(): Promise<{ stdout: string; stderr: string }> {
 
     child.on("error", (error: NodeJS.ErrnoException) => {
       if (error.code === "ENOENT") {
-        reject(new Error("pnpm is not installed in this runtime."));
+        runWithFallback(attempts.slice(1), env).then(resolve).catch(reject);
         return;
       }
       reject(error);
@@ -61,9 +88,11 @@ function runDrizzlePush(): Promise<{ stdout: string; stderr: string }> {
         return;
       }
       const details = stderr.trim() || stdout.trim();
-      reject(
-        new Error(details || `drizzle-kit push failed with exit code ${code ?? "unknown"}.`),
-      );
+      if (attempts.length > 1) {
+        runWithFallback(attempts.slice(1), env).then(resolve).catch(reject);
+        return;
+      }
+      reject(new Error(details || `drizzle-kit push failed with exit code ${code ?? "unknown"}.`));
     });
   });
 }

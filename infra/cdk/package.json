@@ -5,10 +5,8 @@
   "scripts": {
     "build": "tsc",
     "synth": "cdk synth",
-    "deploy:dev": "cdk deploy latex-dev-app latex-dev-observability --exclusively -c env=dev",
-    "deploy:prod": "cdk deploy latex-prod-app latex-prod-observability --exclusively -c env=prod",
-    "deploy:all:dev": "cdk deploy --all -c env=dev",
-    "deploy:all:prod": "cdk deploy --all -c env=prod",
+    "deploy:dev": "cdk deploy --all -c env=dev",
+    "deploy:prod": "cdk deploy --all -c env=prod",
     "diff:dev": "cdk diff --all -c env=dev",
     "diff:prod": "cdk diff --all -c env=prod"
   },

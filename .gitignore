@@ -54,6 +54,6 @@ docker-compose.override.yml
 /infra/cdk/cdk.out/
 /infra/cdk/dist/
 /migration-artifacts/
-/scripts/migration/migration-artifacts/
+/scripts/migration-helpers/migration-artifacts/
 
 latex-config.md

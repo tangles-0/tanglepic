@@ -88,11 +88,8 @@ if [[ "$APP_STACK_EXISTS" == "false" ]]; then
     -c desiredCount=0
 fi
 
-echo "Running DB migration task..."
-"$REPO_ROOT/scripts/infra/ecs-run-db-push.sh" "$ENVIRONMENT"
-
 if [[ "$APP_STACK_EXISTS" == "false" ]]; then
-  echo "Completing first app deploy after successful migration..."
+  echo "Completing first app deploy..."
   pnpm --dir infra/cdk exec cdk deploy \
     "latex-${ENVIRONMENT}-app" \
     "latex-${ENVIRONMENT}-observability" \

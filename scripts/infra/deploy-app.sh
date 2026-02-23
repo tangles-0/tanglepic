@@ -89,8 +89,6 @@ if [[ "$FIRST_DEPLOY" == "true" ]]; then
     -c certificateArn="$CERTIFICATE_ARN" \
     -c desiredCount=0
 
-  echo "Running DB migration task..."
-  "$REPO_ROOT/scripts/infra/ecs-run-db-push.sh" "$ENVIRONMENT"
 fi
 
 echo "Deploying app + observability stacks..."
