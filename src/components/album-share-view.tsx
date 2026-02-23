@@ -1,11 +1,17 @@
 "use client";
 
-type AlbumImage = {
+import { FileViewerContent } from "@/components/viewers/file-viewer-content";
+
+type AlbumMedia = {
   id: string;
+  kind: "image" | "video" | "document" | "other";
   baseName: string;
+  originalFileName?: string;
   ext: string;
-  width: number;
-  height: number;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  previewStatus?: "pending" | "ready" | "failed";
   albumCaption?: string;
   uploadedAt: string;
 };
@@ -13,11 +19,11 @@ type AlbumImage = {
 export default function AlbumShareView({
   shareId,
   albumName,
-  images,
+  media,
 }: {
   shareId: string;
   albumName: string;
-  images: AlbumImage[];
+  media: AlbumMedia[];
 }) {
   const formatTimestamp = (value: string) =>
     `${new Date(value).toISOString().replace("T", " ").slice(0, 19)} UTC`;
@@ -27,26 +33,44 @@ export default function AlbumShareView({
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">{albumName}</h1>
         <p className="text-neutral-600">
-          {images.length} image{images.length === 1 ? "" : "s"}
+          {media.length} file{media.length === 1 ? "" : "s"}
         </p>
       </header>
 
       <div className="space-y-6">
-        {images.map((image) => (
-          <div key={image.id} className="rounded-md border border-neutral-200 p-4">
-            <img
-              src={`/share/album/${shareId}/image/${image.id}/lg.${image.ext}`}
-              alt="Shared album image"
-              className="w-full rounded border border-neutral-200 object-contain"
-            />
-            <div className="mt-3 text-xs text-neutral-500">
-              {image.width}×{image.height} • {formatTimestamp(image.uploadedAt)}
+        {media.map((item) => {
+          const previewExt = item.kind === "image" ? item.ext : "png";
+          const fullUrl = `/share/album/${shareId}/media/${item.kind}/${item.id}/${item.baseName}.${item.ext}`;
+          const previewUrl = `/share/album/${shareId}/media/${item.kind}/${item.id}/${item.baseName}-lg.${previewExt}`;
+          return (
+            <div key={item.id} className="rounded-md border border-neutral-200 p-4">
+              {item.kind === "image" ? (
+                <img
+                  src={previewUrl}
+                  alt="Shared album file"
+                  className="w-full rounded border border-neutral-200 object-contain"
+                />
+              ) : (
+                <FileViewerContent
+                  kind={item.kind}
+                  previewStatus={item.previewStatus}
+                  fullUrl={fullUrl}
+                  previewUrl={previewUrl}
+                  ext={item.ext}
+                  mimeType={item.mimeType}
+                />
+              )}
+              <div className="mt-3 text-xs text-neutral-500">
+                {item.width && item.height ? `${item.width}×${item.height} • ` : ""}
+                {formatTimestamp(item.uploadedAt)}
+              </div>
+              <div className="mt-1 text-xs text-neutral-700">{item.originalFileName || item.baseName}</div>
+              {item.albumCaption ? (
+                <p className="mt-2 text-xs text-neutral-700">{item.albumCaption}</p>
+              ) : null}
             </div>
-            {image.albumCaption ? (
-              <p className="mt-2 text-xs text-neutral-700">{image.albumCaption}</p>
-            ) : null}
-          </div>
-        ))}
+          );
+        })}
       </div>
     </main>
   );

@@ -5,8 +5,8 @@ import { notFound } from "next/navigation";
 import {
   getAlbumPublic,
   getAlbumShareById,
-  listImagesForAlbumPublic,
 } from "@/lib/metadata-store";
+import { listMediaForAlbumPublic } from "@/lib/media-store";
 import AlbumShareView from "@/components/album-share-view";
 
 export default async function AlbumSharePage({
@@ -20,15 +20,15 @@ export default async function AlbumSharePage({
     notFound();
   }
 
-  const [album, images] = await Promise.all([
+  const [album, media] = await Promise.all([
     getAlbumPublic(share.albumId),
-    listImagesForAlbumPublic(share.albumId),
+    listMediaForAlbumPublic(share.albumId),
   ]);
 
   if (!album) {
     notFound();
   }
 
-  return <AlbumShareView shareId={shareId} albumName={album.name} images={images} />;
+  return <AlbumShareView shareId={shareId} albumName={album.name} media={media} />;
 }
 

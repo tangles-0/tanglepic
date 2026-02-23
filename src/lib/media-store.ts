@@ -405,6 +405,27 @@ export async function listMediaForAlbum(userId: string, albumId: string): Promis
     .sort((a, b) => (a.albumOrder || 0) - (b.albumOrder || 0) || new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime());
 }
 
+export async function listMediaForAlbumPublic(albumId: string): Promise<MediaEntry[]> {
+  const [imageRows, videoRows, documentRows, fileRows] = await Promise.all([
+    db.select().from(images).where(eq(images.albumId, albumId)),
+    db.select().from(videos).where(eq(videos.albumId, albumId)),
+    db.select().from(documents).where(eq(documents.albumId, albumId)),
+    db.select().from(files).where(eq(files.albumId, albumId)),
+  ]);
+
+  const flattened = [
+    ...imageRows.map((row) => mapImageRow(row)),
+    ...videoRows.map((row) => mapVideoRow(row)),
+    ...documentRows.map((row) => mapDocumentRow(row)),
+    ...fileRows.map((row) => mapFileRow(row)),
+  ];
+  return flattened.sort(
+    (a, b) =>
+      (a.albumOrder || 0) - (b.albumOrder || 0) ||
+      new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime(),
+  );
+}
+
 export async function getMediaForUser(
   kind: MediaKind,
   id: string,

@@ -540,6 +540,37 @@ export async function storeImageMediaFromBuffer(input: {
       previewStatus: "ready",
     };
   }
+  if (ext === "gif") {
+    const image = sharp(input.buffer, { animated: true, pages: -1 });
+    const metadata = await image.metadata();
+    const width = metadata.width ?? undefined;
+    const height = metadata.pageHeight ?? metadata.height ?? undefined;
+    const originalBuffer = input.buffer;
+    const smBuffer = await image
+      .clone()
+      .resize({ width: 320, withoutEnlargement: true })
+      .gif()
+      .toBuffer();
+    const lgBuffer = await image
+      .clone()
+      .resize({ width: 1024, withoutEnlargement: true })
+      .gif()
+      .toBuffer();
+    await writeKey(buildStorageKey("image", baseName, ext, "original", input.uploadedAt), ext, originalBuffer);
+    await writeKey(buildStorageKey("image", baseName, ext, "sm", input.uploadedAt), ext, smBuffer);
+    await writeKey(buildStorageKey("image", baseName, ext, "lg", input.uploadedAt), ext, lgBuffer);
+    return {
+      baseName,
+      ext,
+      mimeType: input.mimeType,
+      width,
+      height,
+      sizeOriginal: originalBuffer.length,
+      sizeSm: smBuffer.length,
+      sizeLg: lgBuffer.length,
+      previewStatus: "ready",
+    };
+  }
   const image = sharp(input.buffer).rotate();
   const metadata = await image.metadata();
   const format: keyof sharp.FormatEnum =
