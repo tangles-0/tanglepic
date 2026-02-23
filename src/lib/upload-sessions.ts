@@ -44,6 +44,7 @@ export type UploadSessionEntry = {
   totalParts: number;
   mimeType: string;
   ext: string;
+  checksum?: string;
   state: UploadSessionState;
   storageKey?: string;
   s3UploadId?: string;
@@ -59,6 +60,7 @@ type InitInput = {
   chunkSize: number;
   mimeType: string;
   ext: string;
+  checksum?: string;
   targetType?: "image" | "video" | "document" | "other";
 };
 
@@ -79,6 +81,7 @@ function mapSession(row: typeof uploadSessions.$inferSelect): UploadSessionEntry
     totalParts: row.totalParts,
     mimeType: row.mimeType,
     ext: row.ext,
+    checksum: row.checksum ?? undefined,
     state: row.state as UploadSessionState,
     storageKey: row.storageKey ?? undefined,
     s3UploadId: row.s3UploadId ?? undefined,
@@ -104,6 +107,29 @@ async function ensureSessionDirs(id: string): Promise<void> {
 }
 
 export async function initUploadSession(input: InitInput): Promise<UploadSessionEntry> {
+  if (input.checksum) {
+    const existingRows = await db
+      .select()
+      .from(uploadSessions)
+      .where(and(eq(uploadSessions.userId, input.userId), eq(uploadSessions.checksum, input.checksum)));
+    const existing = existingRows
+      .filter(
+        (row) =>
+          row.fileName === input.fileName &&
+          row.fileSize === input.fileSize &&
+          row.ext === input.ext &&
+          row.mimeType === input.mimeType &&
+          row.state !== "complete",
+      )
+      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())[0];
+    if (existing) {
+      if (STORAGE_BACKEND === "local") {
+        await ensureSessionDirs(existing.id);
+      }
+      return mapSession(existing);
+    }
+  }
+
   const sessionId = randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + MAX_SESSION_AGE_MS);
@@ -130,6 +156,7 @@ export async function initUploadSession(input: InitInput): Promise<UploadSession
     targetType: input.targetType ?? "other",
     mimeType: input.mimeType,
     ext: input.ext,
+    checksum: input.checksum ?? null,
     fileName: input.fileName,
     fileSize: input.fileSize,
     chunkSize: input.chunkSize,
@@ -148,6 +175,14 @@ export async function initUploadSession(input: InitInput): Promise<UploadSession
     throw new Error("Upload session could not be created.");
   }
   return session;
+}
+
+export async function listIncompleteUploadSessionsForUser(userId: string): Promise<UploadSessionEntry[]> {
+  const rows = await db.select().from(uploadSessions).where(eq(uploadSessions.userId, userId));
+  return rows
+    .filter((row) => row.state !== "complete")
+    .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
+    .map((row) => mapSession(row));
 }
 
 export async function getUploadSessionForUser(

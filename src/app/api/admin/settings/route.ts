@@ -38,6 +38,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     supportEnabled?: boolean;
     signupsEnabled?: boolean;
     uploadsEnabled?: boolean;
+    resumableThresholdBytes?: number;
   };
 
   const motd = payload.motd?.trim();
@@ -55,6 +56,15 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (donateUrl && !/^https?:\/\//i.test(donateUrl)) {
     return NextResponse.json({ error: "Donate URL must be http(s)." }, { status: 400 });
   }
+  if (
+    typeof payload.resumableThresholdBytes === "number" &&
+    (!Number.isFinite(payload.resumableThresholdBytes) || payload.resumableThresholdBytes < 1024 * 1024)
+  ) {
+    return NextResponse.json(
+      { error: "Resumable threshold must be at least 1MB." },
+      { status: 400 },
+    );
+  }
 
   const settings = await updateAppSettings({
     motd,
@@ -64,6 +74,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     supportEnabled: payload.supportEnabled,
     signupsEnabled: payload.signupsEnabled,
     uploadsEnabled: payload.uploadsEnabled,
+    resumableThresholdBytes: payload.resumableThresholdBytes,
   });
 
   return NextResponse.json({ settings });

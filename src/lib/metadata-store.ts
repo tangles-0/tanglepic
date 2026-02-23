@@ -1149,6 +1149,10 @@ export type GroupLimits = {
   id: string;
   groupId: string | null;
   maxFileSize: number;
+  maxImageSize: number;
+  maxVideoSize: number;
+  maxDocumentSize: number;
+  maxOtherSize: number;
   allowedTypes: string[];
   rateLimitPerMinute: number;
   createdAt: string;
@@ -1157,6 +1161,10 @@ export type GroupLimits = {
 
 const DEFAULT_LIMITS: Omit<GroupLimits, "id" | "groupId" | "createdAt" | "updatedAt"> = {
   maxFileSize: 512 * 1024 * 1024,
+  maxImageSize: 512 * 1024 * 1024,
+  maxVideoSize: 2 * 1024 * 1024 * 1024,
+  maxDocumentSize: 512 * 1024 * 1024,
+  maxOtherSize: 512 * 1024 * 1024,
   allowedTypes: [
     "image/*",
     "video/*",
@@ -1176,10 +1184,23 @@ const DEFAULT_LIMITS: Omit<GroupLimits, "id" | "groupId" | "createdAt" | "update
 };
 
 function mapLimits(row: typeof groupLimits.$inferSelect): GroupLimits {
+  const maxImageSize = Number(row.maxImageSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxImageSize);
+  const maxVideoSize = Number(row.maxVideoSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxVideoSize);
+  const maxDocumentSize = Number(
+    row.maxDocumentSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxDocumentSize,
+  );
+  const maxOtherSize = Number(row.maxOtherSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxOtherSize);
+  const maxFileSize = Number(
+    row.maxFileSize ?? Math.max(maxImageSize, maxVideoSize, maxDocumentSize, maxOtherSize),
+  );
   return {
     id: row.id,
     groupId: row.groupId ?? null,
-    maxFileSize: row.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: row.allowedTypes.split(",").map((item) => item.trim()).filter(Boolean),
     rateLimitPerMinute: row.rateLimitPerMinute,
     createdAt: row.createdAt.toISOString(),
@@ -1204,6 +1225,10 @@ export async function getGroupLimits(groupId: string | null): Promise<GroupLimit
     id: limitId,
     groupId,
     maxFileSize: DEFAULT_LIMITS.maxFileSize,
+    maxImageSize: DEFAULT_LIMITS.maxImageSize,
+    maxVideoSize: DEFAULT_LIMITS.maxVideoSize,
+    maxDocumentSize: DEFAULT_LIMITS.maxDocumentSize,
+    maxOtherSize: DEFAULT_LIMITS.maxOtherSize,
     allowedTypes: DEFAULT_LIMITS.allowedTypes.join(","),
     rateLimitPerMinute: DEFAULT_LIMITS.rateLimitPerMinute,
     createdAt,
@@ -1222,6 +1247,10 @@ export async function getGroupLimits(groupId: string | null): Promise<GroupLimit
 export async function upsertGroupLimits(input: {
   groupId: string | null;
   maxFileSize: number;
+  maxImageSize?: number;
+  maxVideoSize?: number;
+  maxDocumentSize?: number;
+  maxOtherSize?: number;
   allowedTypes: string[];
   rateLimitPerMinute: number;
 }): Promise<GroupLimits> {
@@ -1232,11 +1261,26 @@ export async function upsertGroupLimits(input: {
     .limit(1);
 
   const updatedAt = new Date();
+  const maxImageSize = Number(input.maxImageSize ?? input.maxFileSize);
+  const maxVideoSize = Number(input.maxVideoSize ?? input.maxFileSize);
+  const maxDocumentSize = Number(input.maxDocumentSize ?? input.maxFileSize);
+  const maxOtherSize = Number(input.maxOtherSize ?? input.maxFileSize);
+  const maxFileSize = Math.max(
+    Number(input.maxFileSize),
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
+  );
   if (existing) {
     const [row] = await db
       .update(groupLimits)
       .set({
-        maxFileSize: input.maxFileSize,
+        maxFileSize,
+        maxImageSize,
+        maxVideoSize,
+        maxDocumentSize,
+        maxOtherSize,
         allowedTypes: input.allowedTypes.join(","),
         rateLimitPerMinute: input.rateLimitPerMinute,
         updatedAt,
@@ -1252,7 +1296,11 @@ export async function upsertGroupLimits(input: {
   await db.insert(groupLimits).values({
     id: limitId,
     groupId: input.groupId,
-    maxFileSize: input.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: input.allowedTypes.join(","),
     rateLimitPerMinute: input.rateLimitPerMinute,
     createdAt,
@@ -1262,12 +1310,23 @@ export async function upsertGroupLimits(input: {
   return {
     id: limitId,
     groupId: input.groupId,
-    maxFileSize: input.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: input.allowedTypes,
     rateLimitPerMinute: input.rateLimitPerMinute,
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
   };
+}
+
+export function getMaxAllowedBytesForKind(limits: GroupLimits, kind: "image" | "video" | "document" | "other"): number {
+  if (kind === "image") return limits.maxImageSize;
+  if (kind === "video") return limits.maxVideoSize;
+  if (kind === "document") return limits.maxDocumentSize;
+  return limits.maxOtherSize;
 }
 
 export async function getAdminStats(): Promise<{
@@ -1379,6 +1438,7 @@ export type AppSettings = {
   supportEnabled: boolean;
   signupsEnabled: boolean;
   uploadsEnabled: boolean;
+  resumableThresholdBytes: number;
   updatedAt: string;
 };
 
@@ -1390,6 +1450,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   supportEnabled: true,
   signupsEnabled: true,
   uploadsEnabled: true,
+  resumableThresholdBytes: 64 * 1024 * 1024,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -1406,6 +1467,7 @@ export async function getAppSettings(): Promise<AppSettings> {
       supportEnabled: DEFAULT_SETTINGS.supportEnabled,
       signupsEnabled: DEFAULT_SETTINGS.signupsEnabled,
       uploadsEnabled: DEFAULT_SETTINGS.uploadsEnabled,
+      resumableThresholdBytes: DEFAULT_SETTINGS.resumableThresholdBytes,
       updatedAt: now,
     });
     return { ...DEFAULT_SETTINGS, updatedAt: now.toISOString() };
@@ -1418,6 +1480,7 @@ export async function getAppSettings(): Promise<AppSettings> {
     supportEnabled: row.supportEnabled,
     signupsEnabled: row.signupsEnabled,
     uploadsEnabled: row.uploadsEnabled,
+    resumableThresholdBytes: row.resumableThresholdBytes,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -1430,6 +1493,7 @@ export async function updateAppSettings(input: {
   supportEnabled?: boolean;
   signupsEnabled?: boolean;
   uploadsEnabled?: boolean;
+  resumableThresholdBytes?: number;
 }): Promise<AppSettings> {
   const existing = await getAppSettings();
   const updatedAt = new Date();
@@ -1458,6 +1522,10 @@ export async function updateAppSettings(input: {
         typeof input.uploadsEnabled === "boolean"
           ? input.uploadsEnabled
           : existing.uploadsEnabled,
+      resumableThresholdBytes:
+        typeof input.resumableThresholdBytes === "number"
+          ? input.resumableThresholdBytes
+          : existing.resumableThresholdBytes,
       updatedAt,
     })
     .where(eq(appSettings.id, "global"))
@@ -1471,6 +1539,7 @@ export async function updateAppSettings(input: {
     supportEnabled: row.supportEnabled,
     signupsEnabled: row.signupsEnabled,
     uploadsEnabled: row.uploadsEnabled,
+    resumableThresholdBytes: row.resumableThresholdBytes,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

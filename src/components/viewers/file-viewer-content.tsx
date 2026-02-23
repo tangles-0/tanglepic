@@ -8,11 +8,15 @@ export function FileViewerContent({
   previewStatus,
   fullUrl,
   previewUrl,
+  onRegenerateThumbnail,
+  isRegeneratingThumbnail,
 }: {
   kind: "video" | "document" | "other";
   previewStatus?: "pending" | "ready" | "failed";
   fullUrl: string;
   previewUrl: string;
+  onRegenerateThumbnail?: () => void;
+  isRegeneratingThumbnail?: boolean;
 }) {
   if (kind === "video") {
     return (
@@ -24,9 +28,21 @@ export function FileViewerContent({
           poster={previewStatus === "ready" ? previewUrl : undefined}
         />
         {previewStatus !== "ready" ? (
-          <div className="flex items-center gap-2 text-xs text-neutral-500">
-            <LightClock className="h-4 w-4" fill="currentColor" />
-            <span>preview pending</span>
+          <div className="flex items-center justify-between gap-2 text-xs text-neutral-500">
+            <div className="flex items-center gap-2">
+              <LightClock className="h-4 w-4" fill="currentColor" />
+              <span>{previewStatus === "failed" ? "preview failed" : "preview pending"}</span>
+            </div>
+            {onRegenerateThumbnail ? (
+              <button
+                type="button"
+                onClick={onRegenerateThumbnail}
+                disabled={Boolean(isRegeneratingThumbnail)}
+                className="rounded border border-neutral-200 px-2 py-1 text-[11px] disabled:opacity-50"
+              >
+                {isRegeneratingThumbnail ? "Regenerating..." : "Regenerate thumbnail"}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>

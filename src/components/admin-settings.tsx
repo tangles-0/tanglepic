@@ -10,6 +10,7 @@ type AppSettings = {
   supportEnabled: boolean;
   signupsEnabled: boolean;
   uploadsEnabled: boolean;
+  resumableThresholdBytes: number;
 };
 
 type LegacyMigrationReport = {
@@ -33,6 +34,9 @@ export default function AdminSettings({ initial }: { initial: AppSettings }) {
   const [supportEnabled, setSupportEnabled] = useState(initial.supportEnabled);
   const [signupsEnabled, setSignupsEnabled] = useState(initial.signupsEnabled);
   const [uploadsEnabled, setUploadsEnabled] = useState(initial.uploadsEnabled);
+  const [resumableThresholdMb, setResumableThresholdMb] = useState(
+    Math.max(1, Math.round(initial.resumableThresholdBytes / (1024 * 1024))),
+  );
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [migrationBusy, setMigrationBusy] = useState(false);
@@ -53,6 +57,7 @@ export default function AdminSettings({ initial }: { initial: AppSettings }) {
         supportEnabled,
         signupsEnabled,
         uploadsEnabled,
+        resumableThresholdBytes: Math.max(1024 * 1024, Number(resumableThresholdMb) * 1024 * 1024),
       }),
     });
 
@@ -125,6 +130,16 @@ export default function AdminSettings({ initial }: { initial: AppSettings }) {
             placeholder="https://..."
             value={donateUrl}
             onChange={(event) => setDonateUrl(event.target.value)}
+          />
+        </label>
+        <label className="flex flex-col gap-1 text-xs">
+          Chunked upload threshold (MB)
+          <input
+            className="rounded border px-3 py-2 text-xs"
+            type="number"
+            min={1}
+            value={resumableThresholdMb}
+            onChange={(event) => setResumableThresholdMb(Math.max(1, Number(event.target.value) || 1))}
           />
         </label>
       </div>

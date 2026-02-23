@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, bigint, timestamp, boolean } from "drizzle-orm/pg-core";
 
 export const groups = pgTable("groups", {
   id: text("id").primaryKey(),
@@ -9,7 +9,11 @@ export const groups = pgTable("groups", {
 export const groupLimits = pgTable("group_limits", {
   id: text("id").primaryKey(),
   groupId: text("group_id").references(() => groups.id),
-  maxFileSize: integer("max_file_size").notNull(),
+  maxFileSize: bigint("max_file_size", { mode: "number" }).notNull(),
+  maxImageSize: bigint("max_image_size", { mode: "number" }).notNull(),
+  maxVideoSize: bigint("max_video_size", { mode: "number" }).notNull(),
+  maxDocumentSize: bigint("max_document_size", { mode: "number" }).notNull(),
+  maxOtherSize: bigint("max_other_size", { mode: "number" }).notNull(),
   allowedTypes: text("allowed_types").notNull(),
   rateLimitPerMinute: integer("rate_limit_per_minute").notNull(),
   createdAt: timestamp("created_at", { mode: "date" }).notNull(),
@@ -25,6 +29,9 @@ export const appSettings = pgTable("app_settings", {
   supportEnabled: boolean("support_enabled").notNull().default(true),
   signupsEnabled: boolean("signups_enabled").notNull().default(true),
   uploadsEnabled: boolean("uploads_enabled").notNull().default(true),
+  resumableThresholdBytes: bigint("resumable_threshold_bytes", { mode: "number" })
+    .notNull()
+    .default(64 * 1024 * 1024),
   updatedAt: timestamp("updated_at", { mode: "date" }).notNull(),
 });
 
@@ -68,9 +75,9 @@ export const images = pgTable("images", {
   ext: text("ext").notNull().default("jpg"),
   width: integer("width").notNull(),
   height: integer("height").notNull(),
-  sizeOriginal: integer("size_original").notNull().default(0),
-  sizeSm: integer("size_sm").notNull().default(0),
-  sizeLg: integer("size_lg").notNull().default(0),
+  sizeOriginal: bigint("size_original", { mode: "number" }).notNull().default(0),
+  sizeSm: bigint("size_sm", { mode: "number" }).notNull().default(0),
+  sizeLg: bigint("size_lg", { mode: "number" }).notNull().default(0),
   uploadedAt: timestamp("uploaded_at", { mode: "date" }).notNull(),
 });
 
@@ -88,9 +95,9 @@ export const videos = pgTable("videos", {
   durationSeconds: integer("duration_seconds"),
   width: integer("width"),
   height: integer("height"),
-  sizeOriginal: integer("size_original").notNull().default(0),
-  sizeSm: integer("size_sm").notNull().default(0),
-  sizeLg: integer("size_lg").notNull().default(0),
+  sizeOriginal: bigint("size_original", { mode: "number" }).notNull().default(0),
+  sizeSm: bigint("size_sm", { mode: "number" }).notNull().default(0),
+  sizeLg: bigint("size_lg", { mode: "number" }).notNull().default(0),
   previewStatus: text("preview_status").notNull().default("pending"),
   previewError: text("preview_error"),
   uploadedAt: timestamp("uploaded_at", { mode: "date" }).notNull(),
@@ -108,9 +115,9 @@ export const documents = pgTable("documents", {
   ext: text("ext").notNull(),
   mimeType: text("mime_type").notNull(),
   pageCount: integer("page_count"),
-  sizeOriginal: integer("size_original").notNull().default(0),
-  sizeSm: integer("size_sm").notNull().default(0),
-  sizeLg: integer("size_lg").notNull().default(0),
+  sizeOriginal: bigint("size_original", { mode: "number" }).notNull().default(0),
+  sizeSm: bigint("size_sm", { mode: "number" }).notNull().default(0),
+  sizeLg: bigint("size_lg", { mode: "number" }).notNull().default(0),
   previewStatus: text("preview_status").notNull().default("pending"),
   previewError: text("preview_error"),
   uploadedAt: timestamp("uploaded_at", { mode: "date" }).notNull(),
@@ -127,9 +134,9 @@ export const files = pgTable("files", {
   baseName: text("base_name").notNull(),
   ext: text("ext").notNull(),
   mimeType: text("mime_type").notNull(),
-  sizeOriginal: integer("size_original").notNull().default(0),
-  sizeSm: integer("size_sm").notNull().default(0),
-  sizeLg: integer("size_lg").notNull().default(0),
+  sizeOriginal: bigint("size_original", { mode: "number" }).notNull().default(0),
+  sizeSm: bigint("size_sm", { mode: "number" }).notNull().default(0),
+  sizeLg: bigint("size_lg", { mode: "number" }).notNull().default(0),
   previewStatus: text("preview_status").notNull().default("pending"),
   previewError: text("preview_error"),
   uploadedAt: timestamp("uploaded_at", { mode: "date" }).notNull(),
@@ -205,7 +212,7 @@ export const uploadSessions = pgTable("upload_sessions", {
   mimeType: text("mime_type").notNull(),
   ext: text("ext").notNull(),
   fileName: text("file_name").notNull(),
-  fileSize: integer("file_size").notNull().default(0),
+  fileSize: bigint("file_size", { mode: "number" }).notNull().default(0),
   chunkSize: integer("chunk_size").notNull().default(0),
   totalParts: integer("total_parts").notNull().default(0),
   state: text("state").notNull().default("initiated"),

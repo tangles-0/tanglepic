@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { uploadSingleMedia } from "@/lib/upload-client";
+import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
 import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
 import { LightCaretRight } from '@energiz3r/icon-library/Icons/Light/LightCaretRight';
@@ -15,6 +15,7 @@ import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArro
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 import { LightClock } from '@energiz3r/icon-library/Icons/Light/LightClock';
 import { LightFilePdf } from '@energiz3r/icon-library/Icons/Light/LightFilePdf';
+import { LightPlayCircle } from '@energiz3r/icon-library/Icons/Light/LightPlayCircle';
 
 import { SharePill } from "./share-pill";
 import { DitherIcon } from "./icons/dither";
@@ -69,6 +70,7 @@ export default function GalleryClient({
   uploadAlbumId,
   hideImagesInAlbums = false,
   kindFilter = "all",
+  resumableThresholdBytes = DEFAULT_RESUMABLE_THRESHOLD,
 }: {
   media: GalleryImage[];
   onImagesChange?: (next: GalleryImage[]) => void;
@@ -76,6 +78,7 @@ export default function GalleryClient({
   uploadAlbumId?: string;
   hideImagesInAlbums?: boolean;
   kindFilter?: "all" | "image" | "video" | "document" | "other";
+  resumableThresholdBytes?: number;
 }) {
   const [items, setItems] = useState<GalleryImage[]>(media);
   const [active, setActive] = useState<GalleryImage | null>(null);
@@ -99,6 +102,8 @@ export default function GalleryClient({
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [isDitherOpen, setIsDitherOpen] = useState(false);
   const [ditherError, setDitherError] = useState<string | null>(null);
+  const [previewActionError, setPreviewActionError] = useState<string | null>(null);
+  const [isRegeneratingVideoPreview, setIsRegeneratingVideoPreview] = useState(false);
   const [albumEditError, setAlbumEditError] = useState<string | null>(null);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -112,7 +117,7 @@ export default function GalleryClient({
   const inAlbumContext = Boolean(uploadAlbumId);
 
   useEffect(() => {
-    setItems(media);
+    setItems((current) => (current === media ? current : media));
   }, [media]);
 
   useEffect(() => {
@@ -301,6 +306,13 @@ export default function GalleryClient({
     }
 
     for (const file of itemsToUpload) {
+      if (file.size >= resumableThresholdBytes) {
+        window.alert(
+          `${file.name} is too large for quick gallery upload. Use the Upload page for large/resumable uploads.`,
+        );
+        pushMessage(`${file.name}: use Upload page for large files.`, "error");
+        continue;
+      }
       const result = await uploadSingleMedia(file, uploadAlbumId);
       pushMessage(result.message, result.ok ? "success" : "error");
 
@@ -319,6 +331,7 @@ export default function GalleryClient({
     setShareError(null);
     setRotateError(null);
     setAlbumEditError(null);
+    setPreviewActionError(null);
     setHas640Variant(null);
     setIsChecking640(false);
 
@@ -361,8 +374,63 @@ export default function GalleryClient({
     setShareError(null);
     setRotateError(null);
     setAlbumEditError(null);
+    setPreviewActionError(null);
     setHas640Variant(null);
     setIsChecking640(false);
+  }
+
+  async function regenerateVideoThumbnail() {
+    if (!active || active.kind !== "video" || isRegeneratingVideoPreview) {
+      return;
+    }
+    setPreviewActionError(null);
+    setIsRegeneratingVideoPreview(true);
+    const mediaId = active.id;
+    setItems((current) =>
+      current.map((item) =>
+        item.id === mediaId ? { ...item, previewStatus: "pending" } : item,
+      ),
+    );
+    setActive((current) =>
+      current?.id === mediaId ? { ...current, previewStatus: "pending" } : current,
+    );
+    try {
+      const response = await fetch("/api/media/video-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId }),
+      });
+      const payload = (await response.json()) as { error?: string; previewStatus?: "pending" | "ready" | "failed" };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to regenerate thumbnail.");
+      }
+      const nextStatus = payload.previewStatus ?? "ready";
+      setItems((current) =>
+        current.map((item) =>
+          item.id === mediaId ? { ...item, previewStatus: nextStatus } : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === mediaId ? { ...current, previewStatus: nextStatus } : current,
+      );
+      setImageVersionBumps((current) => ({
+        ...current,
+        [mediaId]: Date.now(),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to regenerate thumbnail.";
+      setPreviewActionError(message);
+      setItems((current) =>
+        current.map((item) =>
+          item.id === mediaId ? { ...item, previewStatus: "failed" } : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === mediaId ? { ...current, previewStatus: "failed" } : current,
+      );
+    } finally {
+      setIsRegeneratingVideoPreview(false);
+    }
   }
 
   function openPreviousImage() {
@@ -864,10 +932,14 @@ export default function GalleryClient({
   }
 
   useEffect(() => {
-    if (onImagesChange) {
-      onImagesChange(items);
+    if (!onImagesChange) {
+      return;
     }
-  }, [items, onImagesChange]);
+    if (items === media) {
+      return;
+    }
+    onImagesChange(items);
+  }, [items, media, onImagesChange]);
 
   useEffect(() => {
     const pending = items.filter((item) => item.kind === "video" && item.previewStatus === "pending");
@@ -891,11 +963,17 @@ export default function GalleryClient({
             return;
           }
           setItems((current) =>
-            current.map((media) =>
-              media.id === item.id && media.previewStatus !== payload.previewStatus
-                ? { ...media, previewStatus: payload.previewStatus }
-                : media,
-            ),
+            {
+              let changed = false;
+              const next = current.map((media) => {
+                if (media.id === item.id && media.previewStatus !== payload.previewStatus) {
+                  changed = true;
+                  return { ...media, previewStatus: payload.previewStatus };
+                }
+                return media;
+              });
+              return changed ? next : current;
+            },
           );
         }),
       );
@@ -1104,14 +1182,21 @@ export default function GalleryClient({
                     <LightFilePdf className="h-10 w-10 text-neutral-500" fill="currentColor" />
                   </div>
                 ) : (
-                  <img
-                    src={image.thumbUrl}
-                    alt="Uploaded"
-                    className="sm:h-48 max-h-64 w-full object-cover mt-2"
-                    loading="lazy"
-                    draggable={false}
-                    onDragStart={(event) => event.preventDefault()}
-                  />
+                  <div className="relative mt-2">
+                    <img
+                      src={image.thumbUrl}
+                      alt="Uploaded"
+                      className="sm:h-48 max-h-64 w-full object-cover"
+                      loading="lazy"
+                      draggable={false}
+                      onDragStart={(event) => event.preventDefault()}
+                    />
+                    {image.kind === "video" ? (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <LightPlayCircle className="h-12 w-12 text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]" fill="currentColor" opacity={0.5} />
+                      </div>
+                    ) : null}
+                  </div>
                 )}
               </button>
               <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
@@ -1310,6 +1395,10 @@ export default function GalleryClient({
                     previewStatus={active.previewStatus}
                     fullUrl={activeDisplayItem?.fullUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}.${active.ext}`}
                     previewUrl={activeDisplayItem?.lgUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}-lg.png`}
+                    onRegenerateThumbnail={
+                      active.kind === "video" ? () => void regenerateVideoThumbnail() : undefined
+                    }
+                    isRegeneratingThumbnail={active.kind === "video" ? isRegeneratingVideoPreview : false}
                   />
                 )}
               </div>
@@ -1343,6 +1432,7 @@ export default function GalleryClient({
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
                 {rotateError ? <p className="text-xs text-red-600">{rotateError}</p> : null}
                 {ditherError ? <p className="text-xs text-red-600">{ditherError}</p> : null}
+                {previewActionError ? <p className="text-xs text-red-600">{previewActionError}</p> : null}
                 {albumEditError ? <p className="text-xs text-red-600">{albumEditError}</p> : null}
 
                 {inAlbumContext ? (

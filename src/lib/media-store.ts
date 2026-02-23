@@ -706,6 +706,35 @@ export async function getMediaPreviewStatusForUser(
   };
 }
 
+export async function updateVideoPreviewForUser(input: {
+  userId: string;
+  mediaId: string;
+  previewStatus: PreviewStatus;
+  previewError?: string | null;
+  sizeSm?: number;
+  sizeLg?: number;
+  width?: number;
+  height?: number;
+}): Promise<MediaEntry | undefined> {
+  const [row] = await db
+    .update(videos)
+    .set({
+      previewStatus: input.previewStatus,
+      previewError: input.previewError ?? null,
+      sizeSm: input.sizeSm,
+      sizeLg: input.sizeLg,
+      width: input.width,
+      height: input.height,
+    })
+    .where(and(eq(videos.userId, input.userId), eq(videos.id, input.mediaId)))
+    .returning();
+
+  if (!row) {
+    return undefined;
+  }
+  return mapVideoRow(row);
+}
+
 export function sortMediaForAlbum(media: MediaEntry[]): MediaEntry[] {
   return media.sort((a, b) => {
     if ((a.albumOrder ?? 0) !== (b.albumOrder ?? 0)) {

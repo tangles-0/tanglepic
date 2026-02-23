@@ -1,6 +1,11 @@
 import type { NextRequest } from "next/server";
 import { getAlbumShareByCode, getImage, getShareByCode } from "@/lib/metadata-store";
-import { getMediaBuffer } from "@/lib/media-storage";
+import {
+  getMediaBuffer,
+  getMediaBufferRange,
+  getMediaBufferSize,
+  pendingVideoPreviewPng,
+} from "@/lib/media-storage";
 import { getSharedMediaByCode, getSharedMediaByCodeAndExt } from "@/lib/media-store";
 import { contentTypeForExt } from "@/lib/media-types";
 import { unavailableImageResponse } from "@/lib/unavailable-image";
@@ -49,6 +54,33 @@ function publicCacheHeaders(ext: string): Headers {
     "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=30, must-revalidate",
     Vary: "Accept-Encoding",
   });
+}
+
+function parseByteRange(rangeHeader: string, total: number): { start: number; end: number } | null {
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(rangeHeader.trim());
+  if (!match) {
+    return null;
+  }
+  const startRaw = match[1];
+  const endRaw = match[2];
+  if (!startRaw && !endRaw) {
+    return null;
+  }
+  if (!startRaw && endRaw) {
+    const suffixLength = Number(endRaw);
+    if (!Number.isFinite(suffixLength) || suffixLength <= 0) {
+      return null;
+    }
+    const length = Math.min(total, suffixLength);
+    return { start: total - length, end: total - 1 };
+  }
+  const start = Number(startRaw);
+  let end = endRaw ? Number(endRaw) : total - 1;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start || start >= total) {
+    return null;
+  }
+  end = Math.min(end, total - 1);
+  return { start, end };
 }
 
 export async function GET(
@@ -107,7 +139,49 @@ export async function GET(
       return withPublicImageCors(await unavailableImageResponse(parsed.ext));
     }
     if (media.kind === "video" && media.previewStatus !== "ready" && parsed.size !== "original") {
-      return withPublicImageCors(await unavailableImageResponse("png"));
+      const fallback = await pendingVideoPreviewPng(parsed.size === "sm" ? "sm" : "lg");
+      return withPublicImageCors(
+        new Response(new Uint8Array(fallback), { headers: publicCacheHeaders("png") }),
+      );
+    }
+    if (media.kind === "video" && parsed.size === "original") {
+      const uploadedAt = new Date(media.uploadedAt);
+      const total = await getMediaBufferSize({
+        kind: media.kind,
+        baseName: media.baseName,
+        ext: media.ext,
+        size: "original",
+        uploadedAt,
+      });
+      const rangeHeader = request.headers.get("range");
+      if (rangeHeader) {
+        const byteRange = parseByteRange(rangeHeader, total);
+        if (!byteRange) {
+          return withPublicImageCors(
+            new Response("Requested Range Not Satisfiable", {
+              status: 416,
+              headers: {
+                "Content-Range": `bytes */${total}`,
+                "Accept-Ranges": "bytes",
+              },
+            }),
+          );
+        }
+        const data = await getMediaBufferRange({
+          kind: media.kind,
+          baseName: media.baseName,
+          ext: media.ext,
+          size: "original",
+          uploadedAt,
+          start: byteRange.start,
+          end: byteRange.end,
+        });
+        const headers = publicCacheHeaders(media.ext);
+        headers.set("Content-Range", `bytes ${byteRange.start}-${byteRange.end}/${total}`);
+        headers.set("Content-Length", String(byteRange.end - byteRange.start + 1));
+        headers.set("Accept-Ranges", "bytes");
+        return withPublicImageCors(new Response(new Uint8Array(data), { status: 206, headers }));
+      }
     }
 
     const data = await getMediaBuffer({
@@ -118,7 +192,11 @@ export async function GET(
       uploadedAt: new Date(media.uploadedAt),
     });
     const responseExt = parsed.size === "original" ? media.ext : media.kind === "image" ? media.ext : "png";
-    return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(responseExt) }));
+    const headers = publicCacheHeaders(responseExt);
+    if (media.kind === "video" && parsed.size === "original") {
+      headers.set("Accept-Ranges", "bytes");
+    }
+    return withPublicImageCors(new Response(new Uint8Array(data), { headers }));
   } catch {
     if (!parsed) {
       return withPublicImageCors(new Response("Service temporarily unavailable.", { status: 503 }));

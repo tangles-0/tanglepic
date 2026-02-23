@@ -25,6 +25,10 @@ export async function GET(request: Request): Promise<NextResponse> {
     state: session.state,
     uploadedParts: session.uploadedParts,
     totalParts: session.totalParts,
+    fileName: session.fileName,
+    fileSize: session.fileSize,
+    chunkSize: session.chunkSize,
+    checksum: session.checksum,
     storageKey: session.storageKey,
   });
 }

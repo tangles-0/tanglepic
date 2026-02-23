@@ -4,6 +4,7 @@ import {
   getAlbumForUser,
   getAppSettings,
   getGroupLimits,
+  getMaxAllowedBytesForKind,
   getUserGroupInfo,
   isAdminUser,
 } from "@/lib/metadata-store";
@@ -82,7 +83,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "File type is not allowed." }, { status: 415 });
   }
 
-  if (file.size > groupLimits.maxFileSize) {
+  if (file.size > getMaxAllowedBytesForKind(groupLimits, "image")) {
     return NextResponse.json({ error: "File exceeds size limit." }, { status: 413 });
   }
 

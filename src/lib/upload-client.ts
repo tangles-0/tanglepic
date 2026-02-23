@@ -17,8 +17,15 @@ export type UploadResult = {
 };
 
 const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024;
-const RESUMABLE_THRESHOLD = 64 * 1024 * 1024;
+export const DEFAULT_RESUMABLE_THRESHOLD = 64 * 1024 * 1024;
 const PART_RETRY_LIMIT = 4;
+
+export type UploadOptions = {
+  resumableThresholdBytes?: number;
+  onProgress?: (uploadedBytes: number, totalBytes: number) => void;
+  resumeFromSessionId?: string;
+  checksum?: string;
+};
 
 type InitUploadResponse = {
   sessionId: string;
@@ -27,34 +34,70 @@ type InitUploadResponse = {
   uploadedParts: Record<string, string>;
 };
 
+type StatusUploadResponse = {
+  sessionId: string;
+  state: string;
+  uploadedParts: Record<string, string>;
+  totalParts: number;
+  chunkSize: number;
+  fileSize: number;
+};
+
 async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => {
     window.setTimeout(resolve, ms);
   });
 }
 
+function sumUploadedBytes(uploadedParts: Record<string, string>, chunkSize: number, totalBytes: number): number {
+  const partCount = Object.keys(uploadedParts).length;
+  return Math.min(totalBytes, partCount * chunkSize);
+}
+
 async function uploadResumable(
   file: File,
   targetType: "image" | "video" | "document" | "other",
+  options?: Pick<UploadOptions, "resumeFromSessionId" | "checksum" | "onProgress">,
 ): Promise<{ ok: boolean; sessionId?: string; storageKey?: string; error?: string }> {
-  const initResponse = await fetch("/api/uploads/init", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      fileName: file.name,
-      fileSize: file.size,
-      mimeType: file.type,
-      chunkSize: DEFAULT_CHUNK_SIZE,
-      targetType,
-    }),
-  });
-  if (!initResponse.ok) {
-    const payload = (await initResponse.json()) as { error?: string };
-    return { ok: false, error: payload.error ?? "Unable to initialize upload session." };
+  let initPayload: InitUploadResponse;
+  if (options?.resumeFromSessionId) {
+    const statusResponse = await fetch(
+      `/api/uploads/status?sessionId=${encodeURIComponent(options.resumeFromSessionId)}`,
+      { cache: "no-store" },
+    );
+    if (!statusResponse.ok) {
+      const payload = (await statusResponse.json()) as { error?: string };
+      return { ok: false, error: payload.error ?? "Unable to resume upload session." };
+    }
+    const statusPayload = (await statusResponse.json()) as StatusUploadResponse;
+    initPayload = {
+      sessionId: statusPayload.sessionId,
+      chunkSize: statusPayload.chunkSize,
+      totalParts: statusPayload.totalParts,
+      uploadedParts: statusPayload.uploadedParts,
+    };
+  } else {
+    const initResponse = await fetch("/api/uploads/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        fileName: file.name,
+        fileSize: file.size,
+        mimeType: file.type,
+        chunkSize: DEFAULT_CHUNK_SIZE,
+        checksum: options?.checksum,
+        targetType,
+      }),
+    });
+    if (!initResponse.ok) {
+      const payload = (await initResponse.json()) as { error?: string };
+      return { ok: false, error: payload.error ?? "Unable to initialize upload session." };
+    }
+    initPayload = (await initResponse.json()) as InitUploadResponse;
   }
-  const initPayload = (await initResponse.json()) as InitUploadResponse;
   const chunkSize = initPayload.chunkSize;
   const totalParts = initPayload.totalParts;
+  options?.onProgress?.(sumUploadedBytes(initPayload.uploadedParts, chunkSize, file.size), file.size);
 
   for (let partNumber = 1; partNumber <= totalParts; partNumber += 1) {
     if (initPayload.uploadedParts[String(partNumber)]) {
@@ -75,17 +118,20 @@ async function uploadResumable(
       });
       if (partResponse.ok) {
         success = true;
+        options?.onProgress?.(
+          Math.min(file.size, partNumber * chunkSize),
+          file.size,
+        );
         break;
       }
       await sleep(300 * (attempt + 1));
     }
     if (!success) {
-      await fetch("/api/uploads/abort", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: initPayload.sessionId }),
-      });
-      return { ok: false, error: `Failed while uploading chunk ${partNumber}/${totalParts}.` };
+      return {
+        ok: false,
+        sessionId: initPayload.sessionId,
+        error: `Failed while uploading chunk ${partNumber}/${totalParts}.`,
+      };
     }
   }
 
@@ -99,12 +145,14 @@ async function uploadResumable(
     return { ok: false, error: payload.error ?? "Failed to finalize upload session." };
   }
   const completePayload = (await completeResponse.json()) as { storageKey?: string };
+  options?.onProgress?.(file.size, file.size);
   return { ok: true, sessionId: initPayload.sessionId, storageKey: completePayload.storageKey };
 }
 
 export async function uploadSingleMedia(
   file: File,
   albumId?: string,
+  options?: UploadOptions,
 ): Promise<UploadResult> {
   const type = file.type.toLowerCase();
   const kind: "image" | "video" | "document" | "other" =
@@ -116,8 +164,16 @@ export async function uploadSingleMedia(
           ? "document"
           : "other";
 
-  if (file.size >= RESUMABLE_THRESHOLD) {
-    const resumable = await uploadResumable(file, kind);
+  const resumableThresholdBytes = Math.max(
+    1024 * 1024,
+    Number(options?.resumableThresholdBytes ?? DEFAULT_RESUMABLE_THRESHOLD),
+  );
+  if (file.size >= resumableThresholdBytes) {
+    const resumable = await uploadResumable(file, kind, {
+      resumeFromSessionId: options?.resumeFromSessionId,
+      checksum: options?.checksum,
+      onProgress: options?.onProgress,
+    });
     if (!resumable.ok || !resumable.sessionId) {
       return { ok: false, message: `${file.name}: ${resumable.error ?? "Upload failed."}` };
     }
@@ -174,6 +230,7 @@ export async function uploadSingleMedia(
   }
 
   const payload = (await response.json()) as { media: UploadResult["media"] };
+  options?.onProgress?.(file.size, file.size);
   return {
     ok: true,
     message: `${file.name} uploaded`,

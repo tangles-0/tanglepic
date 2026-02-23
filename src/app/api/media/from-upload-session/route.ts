@@ -3,7 +3,11 @@ import { getSessionUserId } from "@/lib/auth";
 import { getAlbumForUser } from "@/lib/metadata-store";
 import { addMediaForUser } from "@/lib/media-store";
 import { mediaKindFromType } from "@/lib/media-types";
-import { readCompletedUploadBuffer, storeGenericMediaFromBuffer, storeImageMediaFromBuffer } from "@/lib/media-storage";
+import {
+  readCompletedUploadBuffer,
+  storeGenericMediaFromStoredUpload,
+  storeImageMediaFromBuffer,
+} from "@/lib/media-storage";
 import { getUploadSessionForUser } from "@/lib/upload-sessions";
 
 export const runtime = "nodejs";
@@ -34,25 +38,28 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "Upload session is not complete." }, { status: 409 });
   }
 
-  const buffer = await readCompletedUploadBuffer(session.storageKey);
   const kind = mediaKindFromType(session.mimeType, session.ext);
   const uploadedAt = new Date();
-  const stored =
-    kind === "image"
-      ? await storeImageMediaFromBuffer({
-          buffer,
-          ext: session.ext,
-          mimeType: session.mimeType,
-          uploadedAt,
-        })
-      : await storeGenericMediaFromBuffer({
-          kind: kind === "video" ? "video" : kind === "document" ? "document" : "other",
-          buffer,
-          ext: session.ext,
-          mimeType: session.mimeType,
-          uploadedAt,
-          deferPreview: kind === "video",
-        });
+  let stored;
+  if (kind === "image") {
+    const buffer = await readCompletedUploadBuffer(session.storageKey);
+    stored = await storeImageMediaFromBuffer({
+      buffer,
+      ext: session.ext,
+      mimeType: session.mimeType,
+      uploadedAt,
+    });
+  } else {
+    stored = await storeGenericMediaFromStoredUpload({
+      kind: kind === "video" ? "video" : kind === "document" ? "document" : "other",
+      sourceKey: session.storageKey,
+      sizeOriginal: session.fileSize,
+      ext: session.ext,
+      mimeType: session.mimeType,
+      uploadedAt,
+      deferPreview: kind === "video",
+    });
+  }
   const media = await addMediaForUser({
     userId,
     kind,
@@ -68,6 +75,23 @@ export async function POST(request: Request): Promise<NextResponse> {
     previewStatus: stored.previewStatus,
     uploadedAt: uploadedAt.toISOString(),
   });
+
+  if (media.kind === "video" && media.previewStatus === "pending") {
+    const triggerUrl = new URL("/api/media/video-preview", request.url);
+    const cookie = request.headers.get("cookie");
+    void fetch(triggerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      body: JSON.stringify({ mediaId: media.id }),
+      cache: "no-store",
+    }).catch(() => {
+      // Best-effort background kickoff; polling will keep UI accurate.
+    });
+  }
+
   return NextResponse.json({ media });
 }
 

@@ -26,7 +26,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!session) {
     return NextResponse.json({ error: "Upload session not found." }, { status: 404 });
   }
-  if (session.state === "complete" || session.state === "failed") {
+  if (session.state === "complete" || session.state === "finalizing") {
     return NextResponse.json({ error: "Upload session is not writable." }, { status: 409 });
   }
 

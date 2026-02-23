@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import {
+  getAppSettings,
   getLatestPatchNote,
   getUserLastPatchNoteDismissed,
   isAdminUser,
@@ -24,12 +25,13 @@ export default async function GalleryPage({
     redirect("/");
   }
 
-  const [albums, media, isAdmin, latestPatchNote, dismissedAt] = await Promise.all([
+  const [albums, media, isAdmin, latestPatchNote, dismissedAt, settings] = await Promise.all([
     listAlbums(userId),
     listMediaForUser(userId),
     isAdminUser(userId),
     getLatestPatchNote(),
     getUserLastPatchNoteDismissed(userId),
+    getAppSettings(),
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
   const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "files";
@@ -72,6 +74,7 @@ export default async function GalleryPage({
         initialTab={initialTab}
         albums={albums.map((album) => ({ id: album.id, name: album.name }))}
         media={media}
+        resumableThresholdBytes={settings.resumableThresholdBytes}
       />
     </main>
   );

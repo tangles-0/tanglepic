@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import {
+  getAppSettings,
   getAlbumForUser,
   getLatestPatchNote,
   getUserLastPatchNoteDismissed,
@@ -29,10 +30,11 @@ export default async function AlbumPage({
     redirect("/gallery");
   }
 
-  const [media, latestPatchNote, dismissedAt] = await Promise.all([
+  const [media, latestPatchNote, dismissedAt, settings] = await Promise.all([
     listMediaForAlbum(userId, albumId),
     getLatestPatchNote(),
     getUserLastPatchNoteDismissed(userId),
+    getAppSettings(),
   ]);
   const shouldShowPatchBanner =
     latestPatchNote &&
@@ -65,6 +67,7 @@ export default async function AlbumPage({
         media={media}
         showAlbumImageToggle={false}
         uploadAlbumId={albumId}
+        resumableThresholdBytes={settings.resumableThresholdBytes}
       />
     </main>
   );

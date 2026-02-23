@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { uploadSingleMedia } from "@/lib/upload-client";
+import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
+import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
+import { LightFilePdf } from "@energiz3r/icon-library/Icons/Light/LightFilePdf";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -10,6 +12,7 @@ type UploadedImage = {
   kind: "image" | "video" | "document" | "other";
   baseName: string;
   ext: string;
+  previewStatus?: "pending" | "ready" | "failed";
 };
 
 type ShareInfo = {
@@ -25,7 +28,13 @@ type UploadMessage = {
   tone: "success" | "error";
 };
 
-export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabled?: boolean }) {
+export default function UploadDropzone({
+  uploadsEnabled = true,
+  resumableThresholdBytes = DEFAULT_RESUMABLE_THRESHOLD,
+}: {
+  uploadsEnabled?: boolean;
+  resumableThresholdBytes?: number;
+}) {
   const [albumId, setAlbumId] = useState("");
   const [status, setStatus] = useState<UploadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
@@ -39,6 +48,21 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
   const [shareStates, setShareStates] = useState<Record<string, ShareInfo>>({});
   const [copied, setCopied] = useState<string | null>(null);
   const [messages, setMessages] = useState<UploadMessage[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<
+    Record<string, { name: string; uploaded: number; total: number; resumed: boolean }>
+  >({});
+  const [incompleteSessions, setIncompleteSessions] = useState<
+    Array<{
+      id: string;
+      fileName: string;
+      fileSize: number;
+      state: string;
+      uploadedPartsCount: number;
+      totalParts: number;
+      checksum?: string;
+      updatedAt: string;
+    }>
+  >([]);
   const dragCounter = useRef(0);
   const inputId = useId();
 
@@ -61,20 +85,85 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     }, 4000);
   }
 
+  function formatBytes(bytes: number): string {
+    if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+    const gb = 1024 * 1024 * 1024;
+    const mb = 1024 * 1024;
+    if (bytes >= gb) {
+      return `${(bytes / gb).toFixed(2)} GB`;
+    }
+    return `${(bytes / mb).toFixed(1)} MB`;
+  }
+
+  async function hashFileForResume(file: File): Promise<string> {
+    const firstSlice = await file.slice(0, Math.min(file.size, 1024 * 1024)).arrayBuffer();
+    const lastSliceStart = Math.max(0, file.size - 1024 * 1024);
+    const lastSlice = await file.slice(lastSliceStart, file.size).arrayBuffer();
+    const encoder = new TextEncoder();
+    const meta = encoder.encode(`${file.name}|${file.size}|${file.lastModified}|${file.type}`);
+    const combined = new Uint8Array(meta.length + firstSlice.byteLength + lastSlice.byteLength);
+    combined.set(meta, 0);
+    combined.set(new Uint8Array(firstSlice), meta.length);
+    combined.set(new Uint8Array(lastSlice), meta.length + firstSlice.byteLength);
+    const digest = await crypto.subtle.digest("SHA-256", combined.buffer);
+    return Array.from(new Uint8Array(digest))
+      .map((item) => item.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  async function loadIncompleteSessions() {
+    const response = await fetch("/api/uploads/list", { cache: "no-store" });
+    if (!response.ok) {
+      return;
+    }
+    const payload = (await response.json()) as {
+      sessions?: Array<{
+        id: string;
+        fileName: string;
+        fileSize: number;
+        state: string;
+        uploadedPartsCount: number;
+        totalParts: number;
+        checksum?: string;
+        updatedAt: string;
+      }>;
+    };
+    setIncompleteSessions(payload.sessions ?? []);
+  }
+
   useEffect(() => {
     let isMounted = true;
-    async function loadAlbums() {
-      const response = await fetch("/api/albums");
-      if (!response.ok) {
-        return;
+    async function loadAlbumsAndSessions() {
+      const [albumsResponse, sessionsResponse] = await Promise.all([
+        fetch("/api/albums"),
+        fetch("/api/uploads/list", { cache: "no-store" }),
+      ]);
+      if (albumsResponse.ok) {
+        const payload = (await albumsResponse.json()) as { albums?: { id: string; name: string }[] };
+        if (isMounted && payload.albums) {
+          setAlbums(payload.albums);
+        }
       }
-      const payload = (await response.json()) as { albums?: { id: string; name: string }[] };
-      if (isMounted && payload.albums) {
-        setAlbums(payload.albums);
+      if (sessionsResponse.ok) {
+        const payload = (await sessionsResponse.json()) as {
+          sessions?: Array<{
+            id: string;
+            fileName: string;
+            fileSize: number;
+            state: string;
+            uploadedPartsCount: number;
+            totalParts: number;
+            checksum?: string;
+            updatedAt: string;
+          }>;
+        };
+        if (isMounted) {
+          setIncompleteSessions(payload.sessions ?? []);
+        }
       }
     }
 
-    void loadAlbums();
+    void loadAlbumsAndSessions();
     return () => {
       isMounted = false;
     };
@@ -125,6 +214,51 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     };
   }, [uploadsEnabled]);
 
+  useEffect(() => {
+    const pending = recentUploads.filter(
+      (item) => item.kind === "video" && item.previewStatus === "pending",
+    );
+    if (pending.length === 0) {
+      return;
+    }
+    let isMounted = true;
+    const interval = window.setInterval(() => {
+      const targets = pending.slice(0, 10);
+      void Promise.all(
+        targets.map(async (item) => {
+          const response = await fetch(
+            `/api/media/preview-status?kind=video&mediaId=${encodeURIComponent(item.id)}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) {
+            return;
+          }
+          const payload = (await response.json()) as { previewStatus?: "pending" | "ready" | "failed" };
+          if (!payload.previewStatus || !isMounted) {
+            return;
+          }
+          setRecentUploads((current) =>
+            {
+              let changed = false;
+              const next = current.map((entry) => {
+                if (entry.id === item.id && entry.previewStatus !== payload.previewStatus) {
+                  changed = true;
+                  return { ...entry, previewStatus: payload.previewStatus };
+                }
+                return entry;
+              });
+              return changed ? next : current;
+            },
+          );
+        }),
+      );
+    }, 5000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, [recentUploads]);
+
   async function uploadFiles(files: FileList | File[]) {
     if (!uploadsEnabled) {
       setStatus("error");
@@ -142,12 +276,74 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     setMessage(null);
 
     for (const file of items) {
-      const result = await uploadSingleMedia(file, albumId.trim() || undefined);
+      const fileKey = `${file.name}::${file.size}::${file.lastModified}`;
+      let checksum: string | undefined;
+      try {
+        checksum = await hashFileForResume(file);
+      } catch {
+        checksum = undefined;
+      }
+      const resumeCandidate = checksum
+        ? incompleteSessions.find(
+            (session) =>
+              session.checksum === checksum &&
+              session.fileSize === file.size &&
+              session.fileName === file.name &&
+              session.state !== "complete",
+          )
+        : undefined;
+      const fallbackResumeCandidate =
+        !resumeCandidate
+          ? incompleteSessions.find(
+              (session) =>
+                session.fileSize === file.size &&
+                session.fileName === file.name &&
+                session.state !== "complete",
+            )
+          : undefined;
+      const selectedResumeCandidate = resumeCandidate ?? fallbackResumeCandidate;
+      const isResumed = Boolean(selectedResumeCandidate?.id);
+      if (selectedResumeCandidate?.id) {
+        setIncompleteSessions((current) =>
+          current.filter((session) => session.id !== selectedResumeCandidate.id),
+        );
+      }
+      setUploadProgress((current) => ({
+        ...current,
+        [fileKey]: {
+          name: file.name,
+          uploaded: 0,
+          total: file.size,
+          resumed: isResumed,
+        },
+      }));
+      const result = await uploadSingleMedia(file, albumId.trim() || undefined, {
+        resumableThresholdBytes,
+        resumeFromSessionId: selectedResumeCandidate?.id,
+        checksum,
+        onProgress: (uploaded, total) => {
+          setUploadProgress((current) => ({
+            ...current,
+            [fileKey]: {
+              name: file.name,
+              uploaded,
+              total,
+              resumed: isResumed,
+            },
+          }));
+        },
+      });
       pushMessage(result.message, result.ok ? "success" : "error");
 
       if (!result.ok) {
         setStatus("error");
         setMessage(result.message);
+        setUploadProgress((current) => {
+          const next = { ...current };
+          delete next[fileKey];
+          return next;
+        });
+        await loadIncompleteSessions();
         continue;
       }
 
@@ -162,15 +358,23 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
             kind: image.kind,
             baseName: image.baseName,
             ext: image.ext,
+            previewStatus: image.previewStatus,
           },
           ...current,
         ];
         return next.slice(0, 10);
       });
+      setUploadProgress((current) => {
+        const next = { ...current };
+        delete next[fileKey];
+        return next;
+      });
+      // Session row already removed when resume started.
     }
 
     setStatus("success");
     setMessage(null);
+    await loadIncompleteSessions();
   }
 
   async function handleCreateAlbum() {
@@ -385,11 +589,21 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
                   className="flex items-center justify-between gap-3 rounded border border-neutral-200 px-3 py-2 text-xs"
                 >
                   <div className="flex items-center gap-3">
-                    <img
-                      src={thumbUrl}
-                      alt="Uploaded thumbnail"
-                      className="h-8 w-8 rounded object-cover"
-                    />
+                    {image.kind === "video" && image.previewStatus !== "ready" ? (
+                      <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
+                        <LightClock className="h-4 w-4" fill="currentColor" />
+                      </div>
+                    ) : image.kind === "other" ? (
+                      <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
+                        <LightFilePdf className="h-4 w-4" fill="currentColor" />
+                      </div>
+                    ) : (
+                      <img
+                        src={thumbUrl}
+                        alt="Uploaded thumbnail"
+                        className="h-8 w-8 rounded object-cover"
+                      />
+                    )}
                     <span className="max-w-[160px] truncate">{image.baseName}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -418,6 +632,34 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
                 </div>
               );
             })}
+          </div>
+        </div>
+      ) : null}
+
+      {Object.keys(uploadProgress).length > 0 ? (
+        <div className="space-y-2 rounded border border-neutral-200 p-3">
+          <h3 className="text-xs font-medium text-neutral-600">upload progress</h3>
+          <div className="space-y-1">
+            {Object.entries(uploadProgress).map(([key, progress]) => (
+              <div key={key} className="text-xs text-neutral-600">
+                {progress.resumed ? `Resumed: ${progress.name}` : progress.name}:{" "}
+                {formatBytes(progress.uploaded)} / {formatBytes(progress.total)}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {incompleteSessions.length > 0 ? (
+        <div className="space-y-2 rounded border border-neutral-200 p-3">
+          <h3 className="text-xs font-medium text-neutral-600">failed / interrupted uploads</h3>
+          <div className="space-y-1">
+            {incompleteSessions.slice(0, 20).map((session) => (
+              <div key={session.id} className="text-xs text-neutral-600">
+                {session.fileName} - {session.state} ({session.uploadedPartsCount}/{session.totalParts} parts,{" "}
+                {formatBytes(session.fileSize)})
+              </div>
+            ))}
           </div>
         </div>
       ) : null}

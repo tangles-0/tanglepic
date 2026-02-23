@@ -6,6 +6,10 @@ type GroupLimits = {
   id: string;
   groupId: string | null;
   maxFileSize: number;
+  maxImageSize: number;
+  maxVideoSize: number;
+  maxDocumentSize: number;
+  maxOtherSize: number;
   allowedTypes: string[];
   rateLimitPerMinute: number;
   createdAt: string;
@@ -94,6 +98,18 @@ const MIME_CATEGORIES: MimeCategory[] = [
 ];
 
 const KNOWN_TYPES = new Set(MIME_CATEGORIES.flatMap((category) => category.types));
+const MB = 1024 * 1024;
+const GB = 1024 * 1024 * 1024;
+
+type SizeField = "maxImageSize" | "maxVideoSize" | "maxDocumentSize" | "maxOtherSize";
+type Unit = "MB" | "GB";
+
+const SIZE_FIELDS: Array<{ key: SizeField; label: string }> = [
+  { key: "maxImageSize", label: "Image max size" },
+  { key: "maxVideoSize", label: "Video max size" },
+  { key: "maxDocumentSize", label: "Document max size" },
+  { key: "maxOtherSize", label: "File max size" },
+];
 
 function normalizeTypes(values: string[]): string[] {
   return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
@@ -187,10 +203,29 @@ export default function ManageLimitsClient({
     groupLimits.map((item) => ({ ...item })),
   );
   const [defaultRow, setDefaultRow] = useState<GroupLimits>({ ...ungroupedLimits });
+  const [defaultUnits, setDefaultUnits] = useState<Record<SizeField, Unit>>({
+    maxImageSize: "MB",
+    maxVideoSize: "MB",
+    maxDocumentSize: "MB",
+    maxOtherSize: "MB",
+  });
+  const [rowUnits, setRowUnits] = useState<Record<string, Record<SizeField, Unit>>>(
+    Object.fromEntries(
+      groupLimits.map((row) => [
+        row.groupId,
+        {
+          maxImageSize: "MB" as Unit,
+          maxVideoSize: "MB" as Unit,
+          maxDocumentSize: "MB" as Unit,
+          maxOtherSize: "MB" as Unit,
+        },
+      ]),
+    ),
+  );
 
   function updateNumericRow(
     groupId: string | null,
-    field: "maxFileSize" | "rateLimitPerMinute",
+    field: "rateLimitPerMinute" | SizeField,
     value: string,
   ) {
     if (groupId === null) {
@@ -214,6 +249,42 @@ export default function ManageLimitsClient({
           : row,
       ),
     );
+  }
+
+  function getUnitMultiplier(unit: Unit): number {
+    return unit === "GB" ? GB : MB;
+  }
+
+  function readSizeValue(groupId: string | null, field: SizeField): number {
+    return groupId === null
+      ? defaultRow[field]
+      : rows.find((row) => row.groupId === groupId)?.limits[field] ?? 0;
+  }
+
+  function readUnit(groupId: string | null, field: SizeField): Unit {
+    if (groupId === null) {
+      return defaultUnits[field];
+    }
+    return rowUnits[groupId]?.[field] ?? "MB";
+  }
+
+  function updateUnit(groupId: string | null, field: SizeField, unit: Unit) {
+    if (groupId === null) {
+      setDefaultUnits((current) => ({ ...current, [field]: unit }));
+      return;
+    }
+    setRowUnits((current) => ({
+      ...current,
+      [groupId]: {
+        ...(current[groupId] ?? {
+          maxImageSize: "MB",
+          maxVideoSize: "MB",
+          maxDocumentSize: "MB",
+          maxOtherSize: "MB",
+        }),
+        [field]: unit,
+      },
+    }));
   }
 
   function updateAllowedTypes(groupId: string | null, nextTypes: string[]) {
@@ -245,10 +316,33 @@ export default function ManageLimitsClient({
     setBusyId(groupId ?? "default");
     const payload =
       groupId === null
-        ? { groupId: null, limits: defaultRow }
+        ? {
+            groupId: null,
+            limits: {
+              ...defaultRow,
+              maxFileSize: Math.max(
+                defaultRow.maxImageSize,
+                defaultRow.maxVideoSize,
+                defaultRow.maxDocumentSize,
+                defaultRow.maxOtherSize,
+              ),
+            },
+          }
         : {
             groupId,
-            limits: rows.find((row) => row.groupId === groupId)?.limits,
+            limits: (() => {
+              const row = rows.find((entry) => entry.groupId === groupId)?.limits;
+              if (!row) return undefined;
+              return {
+                ...row,
+                maxFileSize: Math.max(
+                  row.maxImageSize,
+                  row.maxVideoSize,
+                  row.maxDocumentSize,
+                  row.maxOtherSize,
+                ),
+              };
+            })(),
           };
 
     const response = await fetch("/api/admin/limits", {
@@ -284,17 +378,45 @@ export default function ManageLimitsClient({
       <section className="rounded border border-neutral-200 p-4">
         <h2 className="text-sm font-medium">Ungrouped users (default)</h2>
         <div className="mt-3 grid gap-3 md:grid-cols-4">
-          <label className="flex flex-col gap-1 text-xs">
-            Max file size (MB)
-            <input
-              className="rounded border px-2 py-1"
-              type="number"
-              value={Math.round(defaultRow.maxFileSize / (1024 * 1024))}
-              onChange={(event) =>
-                updateNumericRow(null, "maxFileSize", String(Number(event.target.value) * 1024 * 1024))
-              }
-            />
-          </label>
+          <div className="space-y-2 md:col-span-3">
+            <div className="text-xs font-medium">Per-type max file sizes</div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {SIZE_FIELDS.map((field) => {
+                const unit = readUnit(null, field.key);
+                const bytes = readSizeValue(null, field.key);
+                const displayValue = bytes > 0 ? bytes / getUnitMultiplier(unit) : 0;
+                return (
+                  <label key={field.key} className="flex flex-col gap-1 text-xs">
+                    {field.label}
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="w-full rounded border px-2 py-1"
+                        type="number"
+                        min={1}
+                        value={Number.isFinite(displayValue) ? Number(displayValue.toFixed(2)) : 0}
+                        onChange={(event) => {
+                          const numeric = Number(event.target.value);
+                          updateNumericRow(
+                            null,
+                            field.key,
+                            String(Math.round(numeric * getUnitMultiplier(unit))),
+                          );
+                        }}
+                      />
+                      <select
+                        className="rounded border px-2 py-1"
+                        value={unit}
+                        onChange={(event) => updateUnit(null, field.key, event.target.value as Unit)}
+                      >
+                        <option value="MB">MB</option>
+                        <option value="GB">GB</option>
+                      </select>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex flex-col gap-1 text-xs md:col-span-2">
             Allowed types
             <MimeTypePicker
@@ -329,21 +451,47 @@ export default function ManageLimitsClient({
             <div key={row.groupId} className="rounded border border-neutral-100 p-3">
               <div className="text-xs font-medium">{row.groupName}</div>
               <div className="mt-3 grid gap-3 md:grid-cols-4">
-                <label className="flex flex-col gap-1 text-xs">
-                  Max file size (MB)
-                  <input
-                    className="rounded border px-2 py-1"
-                    type="number"
-                    value={Math.round(row.limits.maxFileSize / (1024 * 1024))}
-                    onChange={(event) =>
-                      updateNumericRow(
-                        row.groupId,
-                        "maxFileSize",
-                        String(Number(event.target.value) * 1024 * 1024),
-                      )
-                    }
-                  />
-                </label>
+                <div className="space-y-2 md:col-span-3">
+                  <div className="text-xs font-medium">Per-type max file sizes</div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {SIZE_FIELDS.map((field) => {
+                      const unit = readUnit(row.groupId, field.key);
+                      const bytes = readSizeValue(row.groupId, field.key);
+                      const displayValue = bytes > 0 ? bytes / getUnitMultiplier(unit) : 0;
+                      return (
+                        <label key={`${row.groupId}-${field.key}`} className="flex flex-col gap-1 text-xs">
+                          {field.label}
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="w-full rounded border px-2 py-1"
+                              type="number"
+                              min={1}
+                              value={Number.isFinite(displayValue) ? Number(displayValue.toFixed(2)) : 0}
+                              onChange={(event) => {
+                                const numeric = Number(event.target.value);
+                                updateNumericRow(
+                                  row.groupId,
+                                  field.key,
+                                  String(Math.round(numeric * getUnitMultiplier(unit))),
+                                );
+                              }}
+                            />
+                            <select
+                              className="rounded border px-2 py-1"
+                              value={unit}
+                              onChange={(event) =>
+                                updateUnit(row.groupId, field.key, event.target.value as Unit)
+                              }
+                            >
+                              <option value="MB">MB</option>
+                              <option value="GB">GB</option>
+                            </select>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
                 <div className="flex flex-col gap-1 text-xs md:col-span-2">
                   Allowed types
                   <MimeTypePicker

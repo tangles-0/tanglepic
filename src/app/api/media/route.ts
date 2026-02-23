@@ -1,6 +1,13 @@
 import { NextResponse } from "next/server";
 import { getSessionUserId } from "@/lib/auth";
-import { getAlbumForUser, getAppSettings, getGroupLimits, getUserGroupInfo, isAdminUser } from "@/lib/metadata-store";
+import {
+  getAlbumForUser,
+  getAppSettings,
+  getGroupLimits,
+  getMaxAllowedBytesForKind,
+  getUserGroupInfo,
+  isAdminUser,
+} from "@/lib/metadata-store";
 import { addMediaForUser } from "@/lib/media-store";
 import { extFromFileName, mediaKindFromType } from "@/lib/media-types";
 import { storeGenericMediaFromBuffer, storeImageMediaFromBuffer } from "@/lib/media-storage";
@@ -70,10 +77,16 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!file.type) {
     return NextResponse.json({ error: "File type is required." }, { status: 400 });
   }
+  const ext = extFromFileName(file.name);
+  if (!ext) {
+    return NextResponse.json({ error: "File extension is required." }, { status: 400 });
+  }
+  const kind = mediaKindFromType(file.type, ext);
   if (!isAllowedType(groupLimits.allowedTypes, file.type)) {
     return NextResponse.json({ error: "File type is not allowed." }, { status: 415 });
   }
-  if (file.size > groupLimits.maxFileSize) {
+  const maxAllowedBytes = getMaxAllowedBytesForKind(groupLimits, kind);
+  if (file.size > maxAllowedBytes) {
     return NextResponse.json({ error: "File exceeds size limit." }, { status: 413 });
   }
   const rateResult = checkRateLimit(userId, groupLimits.rateLimitPerMinute);
@@ -96,11 +109,6 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const uploadedAt = new Date();
-  const ext = extFromFileName(file.name);
-  if (!ext) {
-    return NextResponse.json({ error: "File extension is required." }, { status: 400 });
-  }
-  const kind = mediaKindFromType(file.type, ext);
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const stored =
@@ -135,6 +143,22 @@ export async function POST(request: Request): Promise<NextResponse> {
     previewStatus: stored.previewStatus,
     uploadedAt: uploadedAt.toISOString(),
   });
+
+  if (media.kind === "video" && media.previewStatus === "pending") {
+    const triggerUrl = new URL("/api/media/video-preview", request.url);
+    const cookie = request.headers.get("cookie");
+    void fetch(triggerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      body: JSON.stringify({ mediaId: media.id }),
+      cache: "no-store",
+    }).catch(() => {
+      // Best-effort background kickoff; polling will keep UI accurate.
+    });
+  }
 
   return NextResponse.json({ media });
 }
