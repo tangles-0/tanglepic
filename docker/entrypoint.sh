@@ -5,7 +5,7 @@ attempt=1
 max_attempts=15
 
 if [ "${RUN_DB_MIGRATIONS_ON_STARTUP:-false}" = "true" ]; then
-  until pnpm db:push; do
+  until pnpm db:migrate:ci; do
     if [ "$attempt" -ge "$max_attempts" ]; then
       echo "db:push failed after $max_attempts attempts" >&2
       exit 1

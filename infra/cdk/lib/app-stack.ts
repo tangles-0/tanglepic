@@ -45,6 +45,7 @@ export class AppStack extends cdk.Stack {
       description: "Runtime role for latex ECS tasks",
     });
     props.imageBucket.grantReadWrite(taskRole);
+    props.imageBucket.encryptionKey?.grantEncryptDecrypt(taskRole);
     props.appSecret.grantRead(taskRole);
     props.dbCredentialsSecret.grantRead(taskRole);
     props.rateLimitTable.grantReadWriteData(taskRole);

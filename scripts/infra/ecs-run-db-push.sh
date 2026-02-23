@@ -2,8 +2,8 @@
 set -euo pipefail
 
 ENVIRONMENT="${1:-dev}"
-AWS_REGION="${AWS_REGION:-ap-southeast-2}"
-AWS_PROFILE="${AWS_PROFILE:-}"
+AWS_REGION="${AWS_REGION:-ap-southeast-2}" 
+AWS_PROFILE="${AWS_PROFILE:-latex-admin}"
 
 if [[ "$ENVIRONMENT" != "dev" && "$ENVIRONMENT" != "prod" ]]; then
   echo "Usage: $0 [dev|prod]" >&2
@@ -18,7 +18,7 @@ fi
 CLUSTER="latex-${ENVIRONMENT}-cluster"
 SERVICE="latex-${ENVIRONMENT}-svc"
 
-echo "Resolving ECS service configuration from ${CLUSTER}/${SERVICE}..."
+echo "Resolving ECS service configuration from ${AWS_PROFILE:-} ${AWS_REGION} ${CLUSTER}/${SERVICE}..."
 SERVICE_STATUS=$(aws ecs describe-services \
   --region "$AWS_REGION" \
   "${PROFILE_ARGS[@]}" \
@@ -92,7 +92,7 @@ TASK_ARN=$(aws ecs run-task \
   --launch-type FARGATE \
   --task-definition "$TASK_DEF" \
   --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SECURITY_GROUPS],assignPublicIp=${ASSIGN_PUBLIC_IP}}" \
-  --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["./node_modules/.bin/drizzle-kit","push","--config","./drizzle.config.ts"]}]}' \
+  --overrides '{"containerOverrides":[{"name":"LatexContainer","command":["./node_modules/.bin/drizzle-kit","push","--force","--config","./drizzle.config.ts"]}]}' \
   --query 'tasks[0].taskArn' \
   --output text)
 
