@@ -1,22 +1,34 @@
 export type MediaKind = "image" | "video" | "document" | "other";
 
-const DOCUMENT_EXTENSIONS = new Set([
-  "pdf",
+export const PDF_EXTENSIONS = new Set(["pdf"]);
+
+export const DOCUMENT_TEXT_EXTENSIONS = new Set([
   "doc",
   "docx",
+  "txt",
+  "text",
+  "rtf",
+  "odt",
+]);
+
+export const SPREADSHEET_EXTENSIONS = new Set([
   "xls",
   "xlsx",
+  "ods",
+]);
+
+export const PRESENTATION_EXTENSIONS = new Set([
   "ppt",
   "pptx",
-  "txt",
-  "rtf",
-  "csv",
-  "odt",
-  "ods",
   "odp",
 ]);
 
-const VIDEO_EXTENSIONS = new Set([
+export const CSV_EXTENSIONS = new Set([
+  "csv",
+  "tsv",
+]);
+
+export const VIDEO_EXTENSIONS = new Set([
   "mp4",
   "m4v",
   "mov",
@@ -29,7 +41,98 @@ const VIDEO_EXTENSIONS = new Set([
   "flv",
 ]);
 
-const IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp", "gif", "bmp", "tiff", "svg"]);
+export const IMAGE_EXTENSIONS = new Set([
+  "jpg",
+  "jpeg",
+  "png",
+  "webp",
+  "gif",
+  "bmp",
+  "tiff",
+  "svg",
+]);
+
+export const AUDIO_EXTENSIONS = new Set([
+  "mp3",
+  "wav",
+  "midi",
+  "mid",
+  "ogg",
+  "aac",
+  "flac",
+  "m4a",
+  "opus",
+  "aiff",
+  "aif",
+  "wma",
+]);
+
+export const ARCHIVE_EXTENSIONS = new Set([
+  "zip",
+  "7z",
+  "gz",
+  "gzip",
+  "tar",
+  "rar",
+  "bz2",
+  "xz",
+  "tgz",
+  "tbz2",
+  "txz",
+]);
+
+export const CODE_EXTENSIONS = new Set([
+  "md",
+  "markdown",
+  "json",
+  "jsonc",
+  "yaml",
+  "yml",
+  "toml",
+  "ini",
+  "xml",
+  "html",
+  "css",
+  "scss",
+  "less",
+  "js",
+  "mjs",
+  "cjs",
+  "ts",
+  "tsx",
+  "jsx",
+  "py",
+  "rb",
+  "go",
+  "rs",
+  "c",
+  "h",
+  "cpp",
+  "hpp",
+  "java",
+  "kt",
+  "swift",
+  "php",
+  "sh",
+  "bash",
+  "zsh",
+  "ps1",
+  "sql",
+  "lua",
+  "r",
+  "dart",
+  "scala",
+  "pl",
+  "vb",
+]);
+
+export const DOCUMENT_EXTENSIONS = new Set([
+  ...PDF_EXTENSIONS,
+  ...DOCUMENT_TEXT_EXTENSIONS,
+  ...SPREADSHEET_EXTENSIONS,
+  ...PRESENTATION_EXTENSIONS,
+  ...CSV_EXTENSIONS,
+]);
 
 const EXT_TO_MIME: Record<string, string> = {
   jpg: "image/jpeg",
@@ -57,6 +160,11 @@ const EXT_TO_MIME: Record<string, string> = {
   ogg: "audio/ogg",
   aac: "audio/aac",
   flac: "audio/flac",
+  m4a: "audio/mp4",
+  opus: "audio/opus",
+  aiff: "audio/aiff",
+  aif: "audio/aiff",
+  wma: "audio/x-ms-wma",
   pdf: "application/pdf",
   doc: "application/msword",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",

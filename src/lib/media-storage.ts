@@ -12,7 +12,14 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
-import { contentTypeForExt } from "@/lib/media-types";
+import {
+  CODE_EXTENSIONS,
+  CSV_EXTENSIONS,
+  DOCUMENT_TEXT_EXTENSIONS,
+  PRESENTATION_EXTENSIONS,
+  SPREADSHEET_EXTENSIONS,
+  contentTypeForExt,
+} from "@/lib/media-types";
 
 type StorageBackend = "local" | "s3";
 export type MediaSize = "original" | "sm" | "lg";
@@ -213,6 +220,39 @@ function asPreviewPng(text: string): Promise<Buffer> {
   return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
+function escapeXml(input: string): string {
+  return input
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function asTextPreviewPng(label: string, text: string): Promise<Buffer> {
+  const lines = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.replace(/[^\x09\x20-\x7E]/g, " "))
+    .map((line) => line.trimEnd())
+    .filter((line) => line.length > 0)
+    .slice(0, 18);
+  const paddedLines = lines.length > 0 ? lines : ["(empty file)"];
+  const lineNodes = paddedLines
+    .map(
+      (line, index) =>
+        `<text x="56" y="${190 + index * 30}" font-size="24" fill="#d1d5db" font-family="monospace">${escapeXml(line.slice(0, 88))}</text>`,
+    )
+    .join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768">
+  <rect width="100%" height="100%" fill="#0f172a"/>
+  <rect x="24" y="24" width="976" height="720" rx="18" fill="#111827" stroke="#1f2937"/>
+  <text x="56" y="116" font-size="44" fill="#93c5fd" font-family="Arial, sans-serif">${escapeXml(label)}</text>
+  ${lineNodes}
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
 async function tryGeneratePdfPreview(buffer: Buffer): Promise<Buffer | null> {
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "tanglepic-pdf-"));
   const inputPath = path.join(tmpDir, "input.pdf");
@@ -229,6 +269,70 @@ async function tryGeneratePdfPreview(buffer: Buffer): Promise<Buffer | null> {
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
+}
+
+async function tryGenerateOfficePreview(buffer: Buffer, ext: string): Promise<Buffer | null> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "tanglepic-office-"));
+  const inputPath = path.join(tmpDir, `input.${ext}`);
+  const pdfPath = path.join(tmpDir, "input.pdf");
+  const outputPrefix = path.join(tmpDir, "preview");
+  const outputPath = `${outputPrefix}.png`;
+  try {
+    await fs.writeFile(inputPath, buffer);
+    await execFileAsync("soffice", ["--headless", "--convert-to", "pdf", "--outdir", tmpDir, inputPath], {
+      timeout: 60_000,
+    });
+    await execFileAsync("pdftoppm", ["-f", "1", "-singlefile", "-png", pdfPath, outputPrefix], {
+      timeout: 20_000,
+    });
+    return await fs.readFile(outputPath);
+  } catch {
+    return null;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+async function tryGenerateDocumentPreview(
+  buffer: Buffer,
+  ext: string,
+  mimeType: string,
+): Promise<Buffer | null> {
+  const normalizedExt = ext.toLowerCase();
+  const normalizedMime = mimeType.toLowerCase();
+
+  if (normalizedExt === "pdf" || normalizedMime === "application/pdf") {
+    return tryGeneratePdfPreview(buffer);
+  }
+
+  if (
+    normalizedMime.startsWith("text/") ||
+    CSV_EXTENSIONS.has(normalizedExt) ||
+    CODE_EXTENSIONS.has(normalizedExt) ||
+    normalizedExt === "txt" ||
+    normalizedExt === "text"
+  ) {
+    return asTextPreviewPng(`${normalizedExt.toUpperCase()} preview`, buffer.toString("utf8", 0, 256 * 1024));
+  }
+
+  const officeConvertibleExtensions = new Set([
+    ...DOCUMENT_TEXT_EXTENSIONS,
+    ...SPREADSHEET_EXTENSIONS,
+    ...PRESENTATION_EXTENSIONS,
+  ]);
+  if (
+    officeConvertibleExtensions.has(normalizedExt) ||
+    normalizedMime.includes("officedocument") ||
+    normalizedMime.includes("msword") ||
+    normalizedMime.includes("ms-excel") ||
+    normalizedMime.includes("powerpoint") ||
+    normalizedMime.includes("opendocument") ||
+    normalizedMime.includes("rtf")
+  ) {
+    return tryGenerateOfficePreview(buffer, normalizedExt);
+  }
+
+  return null;
 }
 
 async function tryGenerateVideoPreview(originalVideoBuffer: Buffer): Promise<Buffer | null> {
@@ -295,19 +399,22 @@ export async function storeGenericMediaFromBuffer(input: {
   }
 
   let lgBuffer: Buffer;
-  if (
-    input.kind === "document" &&
-    (input.ext.toLowerCase() === "pdf" || input.mimeType.toLowerCase() === "application/pdf")
-  ) {
-    const pdfPreview = await tryGeneratePdfPreview(input.buffer);
-    if (pdfPreview) {
-      lgBuffer = await sharp(pdfPreview).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
-    } else {
-      lgBuffer = await asPreviewPng("Document Preview");
+  if (input.kind === "document") {
+    const preview = await tryGenerateDocumentPreview(input.buffer, input.ext, input.mimeType);
+    if (!preview) {
+      return {
+        baseName,
+        ext: input.ext,
+        mimeType: input.mimeType,
+        sizeOriginal,
+        sizeSm: 0,
+        sizeLg: 0,
+        previewStatus: "failed",
+      };
     }
+    lgBuffer = await sharp(preview).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
   } else {
-    const label = input.kind === "document" ? "Document Preview" : "File Preview";
-    lgBuffer = await asPreviewPng(label);
+    lgBuffer = await asPreviewPng("File Preview");
   }
   const smBuffer = await sharp(lgBuffer).resize({ width: 320, withoutEnlargement: true }).png().toBuffer();
 
@@ -358,21 +465,34 @@ export async function storeGenericMediaFromStoredUpload(input: {
   }
 
   let lgBuffer: Buffer;
-  if (
-    input.kind === "document" &&
-    input.sizeOriginal <= MAX_INLINE_PREVIEW_BYTES &&
-    (input.ext.toLowerCase() === "pdf" || input.mimeType.toLowerCase() === "application/pdf")
-  ) {
-    const sourceBuffer = await readKey(originalKey);
-    const pdfPreview = await tryGeneratePdfPreview(sourceBuffer);
-    if (pdfPreview) {
-      lgBuffer = await sharp(pdfPreview).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
-    } else {
-      lgBuffer = await asPreviewPng("Document Preview");
+  if (input.kind === "document") {
+    if (input.sizeOriginal > MAX_INLINE_PREVIEW_BYTES) {
+      return {
+        baseName,
+        ext: input.ext,
+        mimeType: input.mimeType,
+        sizeOriginal: input.sizeOriginal,
+        sizeSm: 0,
+        sizeLg: 0,
+        previewStatus: "failed",
+      };
     }
+    const sourceBuffer = await readKey(originalKey);
+    const preview = await tryGenerateDocumentPreview(sourceBuffer, input.ext, input.mimeType);
+    if (!preview) {
+      return {
+        baseName,
+        ext: input.ext,
+        mimeType: input.mimeType,
+        sizeOriginal: input.sizeOriginal,
+        sizeSm: 0,
+        sizeLg: 0,
+        previewStatus: "failed",
+      };
+    }
+    lgBuffer = await sharp(preview).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
   } else {
-    const label = input.kind === "document" ? "Document Preview" : "File Preview";
-    lgBuffer = await asPreviewPng(label);
+    lgBuffer = await asPreviewPng("File Preview");
   }
   const smBuffer = await sharp(lgBuffer).resize({ width: 320, withoutEnlargement: true }).png().toBuffer();
   const smKey = buildStorageKey(input.kind, baseName, "png", "sm", input.uploadedAt);
@@ -398,9 +518,30 @@ export async function storeImageMediaFromBuffer(input: {
   uploadedAt: Date;
 }): Promise<StoredMediaResult> {
   const baseName = buildMediaBaseName(input.uploadedAt);
+  const ext = input.ext.toLowerCase() === "jpeg" ? "jpg" : input.ext.toLowerCase();
+  if (ext === "svg") {
+    const metadata = await sharp(input.buffer).metadata();
+    const originalBuffer = input.buffer;
+    // Keep vector data for all sizes to avoid lossy raster conversion.
+    const smBuffer = input.buffer;
+    const lgBuffer = input.buffer;
+    await writeKey(buildStorageKey("image", baseName, ext, "original", input.uploadedAt), ext, originalBuffer);
+    await writeKey(buildStorageKey("image", baseName, ext, "sm", input.uploadedAt), ext, smBuffer);
+    await writeKey(buildStorageKey("image", baseName, ext, "lg", input.uploadedAt), ext, lgBuffer);
+    return {
+      baseName,
+      ext,
+      mimeType: input.mimeType,
+      width: metadata.width ?? undefined,
+      height: metadata.height ?? undefined,
+      sizeOriginal: originalBuffer.length,
+      sizeSm: smBuffer.length,
+      sizeLg: lgBuffer.length,
+      previewStatus: "ready",
+    };
+  }
   const image = sharp(input.buffer).rotate();
   const metadata = await image.metadata();
-  const ext = input.ext === "jpeg" ? "jpg" : input.ext;
   const format: keyof sharp.FormatEnum =
     ext === "jpg" ? "jpeg" : (ext as keyof sharp.FormatEnum);
   const originalBuffer = await image.clone().toFormat(format).toBuffer();

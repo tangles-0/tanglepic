@@ -1,27 +1,7 @@
 "use client";
 
 import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
-import { LightFilePdf } from "@energiz3r/icon-library/Icons/Light/LightFilePdf";
-import { LightFileArchive } from "@energiz3r/icon-library/Icons/Light/LightFileArchive";
-
-const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
-
-function isArchiveLike(ext?: string, mimeType?: string): boolean {
-  const normalizedExt = (ext ?? "").toLowerCase();
-  const normalizedMime = (mimeType ?? "").toLowerCase();
-  if (ARCHIVE_EXTENSIONS.has(normalizedExt)) {
-    return true;
-  }
-  return (
-    normalizedMime.includes("zip") ||
-    normalizedMime.includes("7z") ||
-    normalizedMime.includes("gzip") ||
-    normalizedMime.includes("x-tar") ||
-    normalizedMime.includes("rar") ||
-    normalizedMime.includes("bzip") ||
-    normalizedMime.includes("xz")
-  );
-}
+import { getFileIconForExtension, isAudioExtension } from "@/lib/FileIconHelper";
 
 export function FileViewerContent({
   kind,
@@ -73,6 +53,14 @@ export function FileViewerContent({
     );
   }
   if (kind === "document") {
+    if (previewStatus !== "ready") {
+      const Icon = getFileIconForExtension(ext);
+      return (
+        <div className="flex sm:max-h-[60vh] min-h-[320px] w-full items-center justify-center rounded border border-neutral-200 bg-neutral-50">
+          <Icon className="h-12 w-12 text-neutral-500" fill="currentColor" />
+        </div>
+      );
+    }
     return (
       <a href={fullUrl} target="_blank" rel="noopener noreferrer" className="block">
         <img
@@ -83,13 +71,24 @@ export function FileViewerContent({
       </a>
     );
   }
+  const isAudio = (mimeType ?? "").toLowerCase().startsWith("audio/") || isAudioExtension(ext);
+  if (isAudio) {
+    return (
+      <div className="space-y-3 rounded border border-neutral-200 bg-neutral-50 p-4">
+        <div className="flex items-center justify-center">
+          {(() => {
+            const Icon = getFileIconForExtension(ext);
+            return <Icon className="h-12 w-12 text-neutral-500" fill="currentColor" />;
+          })()}
+        </div>
+        <audio src={fullUrl} controls className="w-full" preload="metadata" />
+      </div>
+    );
+  }
+  const Icon = getFileIconForExtension(ext);
   return (
     <div className="flex sm:max-h-[60vh] min-h-[320px] w-full items-center justify-center rounded border border-neutral-200 bg-neutral-50">
-      {isArchiveLike(ext, mimeType) ? (
-        <LightFileArchive className="h-12 w-12 text-neutral-500" fill="currentColor" />
-      ) : (
-        <LightFilePdf className="h-12 w-12 text-neutral-500" fill="currentColor" />
-      )}
+      <Icon className="h-12 w-12 text-neutral-500" fill="currentColor" />
     </div>
   );
 }

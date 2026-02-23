@@ -14,39 +14,17 @@ import { LightArrowAltUp } from '@energiz3r/icon-library/Icons/Light/LightArrowA
 import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArrowAltDown';
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 import { LightClock } from '@energiz3r/icon-library/Icons/Light/LightClock';
-import { LightFilePdf } from '@energiz3r/icon-library/Icons/Light/LightFilePdf';
-import { LightFileArchive } from '@energiz3r/icon-library/Icons/Light/LightFileArchive';
 import { LightPlayCircle } from '@energiz3r/icon-library/Icons/Light/LightPlayCircle';
 
 import { SharePill } from "./share-pill";
 import { DitherIcon } from "./icons/dither";
 import { ImageViewerContent } from "./viewers/image-viewer-content";
 import { FileViewerContent } from "./viewers/file-viewer-content";
+import { getFileIconForExtension } from "@/lib/FileIconHelper";
 
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "latex-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 const INTERNAL_IMAGE_DRAG_TYPE = "application/x-latex-image-id";
-const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
-
-function isArchiveLike(input: { ext?: string; mimeType?: string; kind?: string }): boolean {
-  if (input.kind !== "other") {
-    return false;
-  }
-  const ext = (input.ext ?? "").toLowerCase();
-  const mime = (input.mimeType ?? "").toLowerCase();
-  if (ARCHIVE_EXTENSIONS.has(ext)) {
-    return true;
-  }
-  return (
-    mime.includes("zip") ||
-    mime.includes("7z") ||
-    mime.includes("gzip") ||
-    mime.includes("x-tar") ||
-    mime.includes("rar") ||
-    mime.includes("bzip") ||
-    mime.includes("xz")
-  );
-}
 
 type GalleryImage = {
   id: string;
@@ -305,6 +283,7 @@ export default function GalleryClient({
   const hasNext = activeIndex >= 0 && activeIndex < displayItems.length - 1;
   const activeDisplayItem = activeIndex >= 0 ? displayItems[activeIndex] : null;
   const isImageActive = active?.kind === "image";
+  const supports640Variant = isImageActive && active?.ext.toLowerCase() !== "svg";
   const canRotateActive =
     active && isImageActive ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
 
@@ -378,7 +357,7 @@ export default function GalleryClient({
             item.id === image.id ? { ...item, shared: true } : item,
           ),
         );
-        if (image.kind === "image") {
+        if (image.kind === "image" && image.ext.toLowerCase() !== "svg") {
           void check640Variant(image.id);
         }
       }
@@ -514,7 +493,7 @@ export default function GalleryClient({
     const payload = (await response.json()) as { share: { id: string }; urls: ShareInfo["urls"] };
     const nextShare = { id: payload.share.id, urls: payload.urls };
     setShare(nextShare);
-    if (image.kind === "image") {
+    if (image.kind === "image" && image.ext.toLowerCase() !== "svg") {
       void check640Variant(image.id);
     }
     setItems((current) =>
@@ -552,6 +531,10 @@ export default function GalleryClient({
   async function generate640Link(image: GalleryImage) {
     if (image.kind !== "image") {
       setShareError("640 variant links are only available for images.");
+      return;
+    }
+    if (image.ext.toLowerCase() === "svg") {
+      setShareError("640 variant links are not available for SVG images.");
       return;
     }
     if (!share) {
@@ -1199,13 +1182,19 @@ export default function GalleryClient({
                       <span>preview pending</span>
                     </div>
                   </div>
+                ) : image.kind === "document" && image.previewStatus !== "ready" ? (
+                  <div className="mt-2 flex h-48 max-h-64 w-full items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50">
+                    {(() => {
+                      const Icon = getFileIconForExtension(image.ext);
+                      return <Icon className="h-10 w-10 text-neutral-500" fill="currentColor" />;
+                    })()}
+                  </div>
                 ) : image.kind === "other" ? (
                   <div className="mt-2 flex h-48 max-h-64 w-full items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50">
-                    {isArchiveLike(image) ? (
-                      <LightFileArchive className="h-10 w-10 text-neutral-500" fill="currentColor" />
-                    ) : (
-                      <LightFilePdf className="h-10 w-10 text-neutral-500" fill="currentColor" />
-                    )}
+                    {(() => {
+                      const Icon = getFileIconForExtension(image.ext);
+                      return <Icon className="h-10 w-10 text-neutral-500" fill="currentColor" />;
+                    })()}
                   </div>
                 ) : (
                   <div className="relative mt-2">
@@ -1501,40 +1490,58 @@ export default function GalleryClient({
                       </button>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-neutral-600">BBCode</label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyText(`[img]${origin}${share.urls.original}[/img]`, "bbcode")
-                        }
-                        className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "bbcode" ? "text-emerald-600" : ""}`}
-                      >
-                        {copied === "bbcode" ? "Copied link to clipboard!" : 
-                        `[img]${origin}${share.urls.original}[/img]`}
-                      </button>
-                    </div>
+                    {active.kind === "image" ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-neutral-600">BBCode</label>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyText(`[img]${origin}${share.urls.original}[/img]`, "bbcode")
+                          }
+                          className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "bbcode" ? "text-emerald-600" : ""}`}
+                        >
+                          {copied === "bbcode" ? "Copied link to clipboard!" : 
+                          `[img]${origin}${share.urls.original}[/img]`}
+                        </button>
+                      </div>
+                    ) : null}
 
                     <div className="space-y-2">
                       <label className="text-xs font-medium text-neutral-600">
                         Linked BBCode
                       </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          copyText(
-                            `[url=${origin}${share.urls.original}][img]${origin}${share.urls.sm}[/img][/url]`,
-                            "linked",
-                          )
-                        }
-                        className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "linked" ? "text-emerald-600" : ""}`}
-                      >
-                        {copied === "linked" ? "Copied link to clipboard!" : 
-                        `[url=${origin}${share.urls.original}][img]${origin}${share.urls.sm}[/img][/url]`}
-                      </button>
+                      {active.kind === "image" ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyText(
+                              `[url=${origin}${share.urls.original}][img]${origin}${share.urls.sm}[/img][/url]`,
+                              "linked",
+                            )
+                          }
+                          className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "linked" ? "text-emerald-600" : ""}`}
+                        >
+                          {copied === "linked" ? "Copied link to clipboard!" : 
+                          `[url=${origin}${share.urls.original}][img]${origin}${share.urls.sm}[/img][/url]`}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            copyText(
+                              `[url]${origin}${share.urls.original}[/url]`,
+                              "linked",
+                            )
+                          }
+                          className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "linked" ? "text-emerald-600" : ""}`}
+                        >
+                          {copied === "linked" ? "Copied link to clipboard!" : 
+                          `[url]${origin}${share.urls.original}[/url]`}
+                        </button>
+                      )}
                     </div>
 
-                    {active.kind === "image" ? (
+                    {supports640Variant ? (
                       <div className="space-y-2">
                         <label className="text-xs font-medium text-neutral-600">
                           Direct link (max size 640x480)

@@ -120,11 +120,17 @@ export async function GET(
     if (imageShare) {
       const image = await getImage(imageShare.imageId);
       if (image && image.ext === parsed.ext) {
+        const imageRequestedSize =
+          image.ext.toLowerCase() === "svg" && parsed.size !== "original"
+            ? "original"
+            : parsed.size === "x640"
+              ? "lg"
+              : parsed.size;
         const data = await getMediaBuffer({
           kind: "image",
           baseName: image.baseName,
           ext: image.ext,
-          size: parsed.size === "x640" ? "lg" : parsed.size,
+          size: imageRequestedSize,
           uploadedAt: new Date(image.uploadedAt),
         });
         return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(image.ext) }));
@@ -144,7 +150,17 @@ export async function GET(
         new Response(new Uint8Array(fallback), { headers: publicCacheHeaders("png") }),
       );
     }
-    if (media.kind === "video" && parsed.size === "original") {
+    const requestedSize =
+      media.kind === "image" && media.ext.toLowerCase() === "svg" && parsed.size !== "original"
+        ? "original"
+        : parsed.size === "x640"
+          ? "lg"
+          : parsed.size;
+    const isRangeStreamableOriginal =
+      requestedSize === "original" &&
+      (media.kind === "video" ||
+        (media.kind === "other" && (media.mimeType ?? "").toLowerCase().startsWith("audio/")));
+    if (isRangeStreamableOriginal) {
       const uploadedAt = new Date(media.uploadedAt);
       const total = await getMediaBufferSize({
         kind: media.kind,
@@ -188,12 +204,13 @@ export async function GET(
       kind: media.kind,
       baseName: media.baseName,
       ext: media.ext,
-      size: parsed.size === "x640" ? "lg" : parsed.size,
+      size: requestedSize,
       uploadedAt: new Date(media.uploadedAt),
     });
-    const responseExt = parsed.size === "original" ? media.ext : media.kind === "image" ? media.ext : "png";
+    const responseExt =
+      requestedSize === "original" ? media.ext : media.kind === "image" ? media.ext : "png";
     const headers = publicCacheHeaders(responseExt);
-    if (media.kind === "video" && parsed.size === "original") {
+    if (isRangeStreamableOriginal) {
       headers.set("Accept-Ranges", "bytes");
     }
     return withPublicImageCors(new Response(new Uint8Array(data), { headers }));

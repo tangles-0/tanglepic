@@ -82,6 +82,10 @@ export async function GET(
   }
 
   try {
+    const requestedSize =
+      parsedKind === "image" && media.ext.toLowerCase() === "svg" && parsed.size !== "original"
+        ? "original"
+        : parsed.size;
     if (parsedKind === "video" && parsed.size !== "original" && media.previewStatus !== "ready") {
       const fallback = await pendingVideoPreviewPng(parsed.size);
       return new Response(new Uint8Array(fallback), {
@@ -94,13 +98,17 @@ export async function GET(
         },
       });
     }
-    if (parsedKind === "video" && parsed.size === "original") {
+    const isRangeStreamableOriginal =
+      requestedSize === "original" &&
+      (parsedKind === "video" ||
+        (parsedKind === "other" && (media.mimeType ?? "").toLowerCase().startsWith("audio/")));
+    if (isRangeStreamableOriginal) {
       const uploadedAt = new Date(media.uploadedAt);
       const total = await getMediaBufferSize({
         kind: parsedKind,
         baseName: media.baseName,
         ext: media.ext,
-        size: parsed.size,
+        size: requestedSize,
         uploadedAt,
       });
       const rangeHeader = request.headers.get("range");
@@ -119,7 +127,7 @@ export async function GET(
           kind: parsedKind,
           baseName: media.baseName,
           ext: media.ext,
-          size: parsed.size,
+          size: requestedSize,
           uploadedAt,
           start: byteRange.start,
           end: byteRange.end,
@@ -143,14 +151,15 @@ export async function GET(
       kind: parsedKind,
       baseName: media.baseName,
       ext: media.ext,
-      size: parsed.size,
+      size: requestedSize,
       uploadedAt: new Date(media.uploadedAt),
     });
-    const responseExt = parsed.size === "original" ? media.ext : "png";
+    const responseExt =
+      requestedSize === "original" ? media.ext : parsedKind === "image" ? media.ext : "png";
     return new Response(new Uint8Array(data), {
       headers: {
         "Content-Type": contentTypeForExt(responseExt),
-        ...(parsedKind === "video" && parsed.size === "original" ? { "Accept-Ranges": "bytes" } : {}),
+        ...(isRangeStreamableOriginal ? { "Accept-Ranges": "bytes" } : {}),
         "Cache-Control": "private, no-store, max-age=0, must-revalidate",
         Pragma: "no-cache",
         Expires: "0",

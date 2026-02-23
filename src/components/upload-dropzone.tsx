@@ -3,8 +3,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
 import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
-import { LightFilePdf } from "@energiz3r/icon-library/Icons/Light/LightFilePdf";
-import { LightFileArchive } from "@energiz3r/icon-library/Icons/Light/LightFileArchive";
+import { getFileIconForExtension } from "@/lib/FileIconHelper";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -16,28 +15,6 @@ type UploadedImage = {
   mimeType?: string;
   previewStatus?: "pending" | "ready" | "failed";
 };
-
-const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
-
-function isArchiveLike(entry: Pick<UploadedImage, "kind" | "ext" | "mimeType">): boolean {
-  if (entry.kind !== "other") {
-    return false;
-  }
-  const ext = (entry.ext ?? "").toLowerCase();
-  const mime = (entry.mimeType ?? "").toLowerCase();
-  if (ARCHIVE_EXTENSIONS.has(ext)) {
-    return true;
-  }
-  return (
-    mime.includes("zip") ||
-    mime.includes("7z") ||
-    mime.includes("gzip") ||
-    mime.includes("x-tar") ||
-    mime.includes("rar") ||
-    mime.includes("bzip") ||
-    mime.includes("xz")
-  );
-}
 
 type ShareInfo = {
   id: string;
@@ -642,13 +619,19 @@ export default function UploadDropzone({
                       <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
                         <LightClock className="h-4 w-4" fill="currentColor" />
                       </div>
+                    ) : image.kind === "document" && image.previewStatus !== "ready" ? (
+                      <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
+                        {(() => {
+                          const Icon = getFileIconForExtension(image.ext);
+                          return <Icon className="h-4 w-4" fill="currentColor" />;
+                        })()}
+                      </div>
                     ) : image.kind === "other" ? (
                       <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
-                        {isArchiveLike(image) ? (
-                          <LightFileArchive className="h-4 w-4" fill="currentColor" />
-                        ) : (
-                          <LightFilePdf className="h-4 w-4" fill="currentColor" />
-                        )}
+                        {(() => {
+                          const Icon = getFileIconForExtension(image.ext);
+                          return <Icon className="h-4 w-4" fill="currentColor" />;
+                        })()}
                       </div>
                     ) : (
                       <img
