@@ -13,3 +13,8 @@ README.md
 .vercel
 coverage
 .nyc_output
+
+data
+docs
+migration-artifacts
+reference-files

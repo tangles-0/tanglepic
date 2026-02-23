@@ -10,8 +10,7 @@ WORKDIR /app
 
 # Install production dependencies with pnpm
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm \
-  && pnpm install --frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod
 
 # Rebuild the source code only when needed
 FROM base AS builder
@@ -19,7 +18,7 @@ WORKDIR /app
 
 # Install ALL dependencies (including dev dependencies) for build
 COPY package.json pnpm-lock.yaml ./
-RUN npm install -g pnpm \
+RUN corepack enable \
   && pnpm install --frozen-lockfile
 
 COPY . .
@@ -42,10 +41,9 @@ RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 
-RUN npm install -g pnpm
+RUN corepack enable
 
 # Copy the public folder
-RUN ls -a /app
 RUN mkdir -p /app/public && chown -R nextjs:nodejs /app/public
 COPY --from=builder /app/public ./public
 
@@ -59,7 +57,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/docker/entrypoint.sh /app/entrypoint.sh
 COPY --from=builder --chown=nextjs:nodejs /app/package.json /app/package.json
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules /app/node_modules
+# Keep runtime deps minimal by taking prod-only installs from deps stage.
+COPY --from=deps --chown=nextjs:nodejs /app/node_modules /app/node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/drizzle.config.ts /app/drizzle.config.ts
 COPY --from=builder --chown=nextjs:nodejs /app/tsconfig.json /app/tsconfig.json
 COPY --from=builder --chown=nextjs:nodejs /app/src/db/schema.ts /app/src/db/schema.ts
