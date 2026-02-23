@@ -7,12 +7,15 @@ import {
   albumShares,
   albums,
   appSettings,
+  documents,
+  files,
   groupLimits,
   groups,
   images,
   patchNotes,
   shares,
   users,
+  videos,
 } from "@/db/schema";
 
 export type Album = {
@@ -325,17 +328,49 @@ export async function getUserUploadStats(userId: string): Promise<{
   imageCount: number;
   totalBytes: number;
 }> {
-  const [row] = await db
+  const [imageRow] = await db
     .select({
       totalBytes: sql<number>`coalesce(sum(${images.sizeOriginal} + ${images.sizeSm} + ${images.sizeLg}), 0)`,
       imageCount: sql<number>`count(${images.id})`,
     })
     .from(images)
     .where(eq(images.userId, userId));
+  const [videoRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${videos.sizeOriginal} + ${videos.sizeSm} + ${videos.sizeLg}), 0)`,
+      count: sql<number>`count(${videos.id})`,
+    })
+    .from(videos)
+    .where(eq(videos.userId, userId));
+  const [documentRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${documents.sizeOriginal} + ${documents.sizeSm} + ${documents.sizeLg}), 0)`,
+      count: sql<number>`count(${documents.id})`,
+    })
+    .from(documents)
+    .where(eq(documents.userId, userId));
+  const [fileRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${files.sizeOriginal} + ${files.sizeSm} + ${files.sizeLg}), 0)`,
+      count: sql<number>`count(${files.id})`,
+    })
+    .from(files)
+    .where(eq(files.userId, userId));
+
+  const totalCount =
+    Number(imageRow?.imageCount ?? 0) +
+    Number(videoRow?.count ?? 0) +
+    Number(documentRow?.count ?? 0) +
+    Number(fileRow?.count ?? 0);
+  const totalBytes =
+    Number(imageRow?.totalBytes ?? 0) +
+    Number(videoRow?.totalBytes ?? 0) +
+    Number(documentRow?.totalBytes ?? 0) +
+    Number(fileRow?.totalBytes ?? 0);
 
   return {
-    imageCount: Number(row?.imageCount ?? 0),
-    totalBytes: Number(row?.totalBytes ?? 0),
+    imageCount: totalCount,
+    totalBytes,
   };
 }
 
@@ -1114,6 +1149,10 @@ export type GroupLimits = {
   id: string;
   groupId: string | null;
   maxFileSize: number;
+  maxImageSize: number;
+  maxVideoSize: number;
+  maxDocumentSize: number;
+  maxOtherSize: number;
   allowedTypes: string[];
   rateLimitPerMinute: number;
   createdAt: string;
@@ -1121,16 +1160,47 @@ export type GroupLimits = {
 };
 
 const DEFAULT_LIMITS: Omit<GroupLimits, "id" | "groupId" | "createdAt" | "updatedAt"> = {
-  maxFileSize: 10 * 1024 * 1024,
-  allowedTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  maxFileSize: 512 * 1024 * 1024,
+  maxImageSize: 512 * 1024 * 1024,
+  maxVideoSize: 2 * 1024 * 1024 * 1024,
+  maxDocumentSize: 512 * 1024 * 1024,
+  maxOtherSize: 512 * 1024 * 1024,
+  allowedTypes: [
+    "image/*",
+    "video/*",
+    "audio/*",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/x-7z-compressed",
+    "application/gzip",
+  ],
   rateLimitPerMinute: 30,
 };
 
 function mapLimits(row: typeof groupLimits.$inferSelect): GroupLimits {
+  const maxImageSize = Number(row.maxImageSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxImageSize);
+  const maxVideoSize = Number(row.maxVideoSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxVideoSize);
+  const maxDocumentSize = Number(
+    row.maxDocumentSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxDocumentSize,
+  );
+  const maxOtherSize = Number(row.maxOtherSize ?? row.maxFileSize ?? DEFAULT_LIMITS.maxOtherSize);
+  const maxFileSize = Number(
+    row.maxFileSize ?? Math.max(maxImageSize, maxVideoSize, maxDocumentSize, maxOtherSize),
+  );
   return {
     id: row.id,
     groupId: row.groupId ?? null,
-    maxFileSize: row.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: row.allowedTypes.split(",").map((item) => item.trim()).filter(Boolean),
     rateLimitPerMinute: row.rateLimitPerMinute,
     createdAt: row.createdAt.toISOString(),
@@ -1155,6 +1225,10 @@ export async function getGroupLimits(groupId: string | null): Promise<GroupLimit
     id: limitId,
     groupId,
     maxFileSize: DEFAULT_LIMITS.maxFileSize,
+    maxImageSize: DEFAULT_LIMITS.maxImageSize,
+    maxVideoSize: DEFAULT_LIMITS.maxVideoSize,
+    maxDocumentSize: DEFAULT_LIMITS.maxDocumentSize,
+    maxOtherSize: DEFAULT_LIMITS.maxOtherSize,
     allowedTypes: DEFAULT_LIMITS.allowedTypes.join(","),
     rateLimitPerMinute: DEFAULT_LIMITS.rateLimitPerMinute,
     createdAt,
@@ -1173,6 +1247,10 @@ export async function getGroupLimits(groupId: string | null): Promise<GroupLimit
 export async function upsertGroupLimits(input: {
   groupId: string | null;
   maxFileSize: number;
+  maxImageSize?: number;
+  maxVideoSize?: number;
+  maxDocumentSize?: number;
+  maxOtherSize?: number;
   allowedTypes: string[];
   rateLimitPerMinute: number;
 }): Promise<GroupLimits> {
@@ -1183,11 +1261,26 @@ export async function upsertGroupLimits(input: {
     .limit(1);
 
   const updatedAt = new Date();
+  const maxImageSize = Number(input.maxImageSize ?? input.maxFileSize);
+  const maxVideoSize = Number(input.maxVideoSize ?? input.maxFileSize);
+  const maxDocumentSize = Number(input.maxDocumentSize ?? input.maxFileSize);
+  const maxOtherSize = Number(input.maxOtherSize ?? input.maxFileSize);
+  const maxFileSize = Math.max(
+    Number(input.maxFileSize),
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
+  );
   if (existing) {
     const [row] = await db
       .update(groupLimits)
       .set({
-        maxFileSize: input.maxFileSize,
+        maxFileSize,
+        maxImageSize,
+        maxVideoSize,
+        maxDocumentSize,
+        maxOtherSize,
         allowedTypes: input.allowedTypes.join(","),
         rateLimitPerMinute: input.rateLimitPerMinute,
         updatedAt,
@@ -1203,7 +1296,11 @@ export async function upsertGroupLimits(input: {
   await db.insert(groupLimits).values({
     id: limitId,
     groupId: input.groupId,
-    maxFileSize: input.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: input.allowedTypes.join(","),
     rateLimitPerMinute: input.rateLimitPerMinute,
     createdAt,
@@ -1213,12 +1310,23 @@ export async function upsertGroupLimits(input: {
   return {
     id: limitId,
     groupId: input.groupId,
-    maxFileSize: input.maxFileSize,
+    maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes: input.allowedTypes,
     rateLimitPerMinute: input.rateLimitPerMinute,
     createdAt: createdAt.toISOString(),
     updatedAt: updatedAt.toISOString(),
   };
+}
+
+export function getMaxAllowedBytesForKind(limits: GroupLimits, kind: "image" | "video" | "document" | "other"): number {
+  if (kind === "image") return limits.maxImageSize;
+  if (kind === "video") return limits.maxVideoSize;
+  if (kind === "document") return limits.maxDocumentSize;
+  return limits.maxOtherSize;
 }
 
 export async function getAdminStats(): Promise<{
@@ -1233,12 +1341,30 @@ export async function getAdminStats(): Promise<{
   albumCount: number;
   filetypeBreakdown: { ext: string; count: number }[];
 }> {
-  const [row] = await db
+  const [imageRow] = await db
     .select({
       totalBytes: sql<number>`coalesce(sum(${images.sizeOriginal} + ${images.sizeSm} + ${images.sizeLg}), 0)`,
       imageCount: sql<number>`count(${images.id})`,
     })
     .from(images);
+  const [videoRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${videos.sizeOriginal} + ${videos.sizeSm} + ${videos.sizeLg}), 0)`,
+      count: sql<number>`count(${videos.id})`,
+    })
+    .from(videos);
+  const [documentRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${documents.sizeOriginal} + ${documents.sizeSm} + ${documents.sizeLg}), 0)`,
+      count: sql<number>`count(${documents.id})`,
+    })
+    .from(documents);
+  const [fileRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${files.sizeOriginal} + ${files.sizeSm} + ${files.sizeLg}), 0)`,
+      count: sql<number>`count(${files.id})`,
+    })
+    .from(files);
 
   const [userRow] = await db
     .select({ userCount: sql<number>`count(${users.id})` })
@@ -1275,8 +1401,16 @@ export async function getAdminStats(): Promise<{
     .groupBy(images.ext)
     .orderBy(sql`count(${images.id}) desc`);
 
-  const imageCount = Number(row?.imageCount ?? 0);
-  const totalBytes = Number(row?.totalBytes ?? 0);
+  const imageCount =
+    Number(imageRow?.imageCount ?? 0) +
+    Number(videoRow?.count ?? 0) +
+    Number(documentRow?.count ?? 0) +
+    Number(fileRow?.count ?? 0);
+  const totalBytes =
+    Number(imageRow?.totalBytes ?? 0) +
+    Number(videoRow?.totalBytes ?? 0) +
+    Number(documentRow?.totalBytes ?? 0) +
+    Number(fileRow?.totalBytes ?? 0);
   const sharedCount = Number(sharedRow?.sharedCount ?? 0);
 
   return {
@@ -1304,6 +1438,7 @@ export type AppSettings = {
   supportEnabled: boolean;
   signupsEnabled: boolean;
   uploadsEnabled: boolean;
+  resumableThresholdBytes: number;
   updatedAt: string;
 };
 
@@ -1315,6 +1450,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   supportEnabled: true,
   signupsEnabled: true,
   uploadsEnabled: true,
+  resumableThresholdBytes: 64 * 1024 * 1024,
   updatedAt: new Date(0).toISOString(),
 };
 
@@ -1331,6 +1467,7 @@ export async function getAppSettings(): Promise<AppSettings> {
       supportEnabled: DEFAULT_SETTINGS.supportEnabled,
       signupsEnabled: DEFAULT_SETTINGS.signupsEnabled,
       uploadsEnabled: DEFAULT_SETTINGS.uploadsEnabled,
+      resumableThresholdBytes: DEFAULT_SETTINGS.resumableThresholdBytes,
       updatedAt: now,
     });
     return { ...DEFAULT_SETTINGS, updatedAt: now.toISOString() };
@@ -1343,6 +1480,7 @@ export async function getAppSettings(): Promise<AppSettings> {
     supportEnabled: row.supportEnabled,
     signupsEnabled: row.signupsEnabled,
     uploadsEnabled: row.uploadsEnabled,
+    resumableThresholdBytes: row.resumableThresholdBytes,
     updatedAt: row.updatedAt.toISOString(),
   };
 }
@@ -1355,6 +1493,7 @@ export async function updateAppSettings(input: {
   supportEnabled?: boolean;
   signupsEnabled?: boolean;
   uploadsEnabled?: boolean;
+  resumableThresholdBytes?: number;
 }): Promise<AppSettings> {
   const existing = await getAppSettings();
   const updatedAt = new Date();
@@ -1383,6 +1522,10 @@ export async function updateAppSettings(input: {
         typeof input.uploadsEnabled === "boolean"
           ? input.uploadsEnabled
           : existing.uploadsEnabled,
+      resumableThresholdBytes:
+        typeof input.resumableThresholdBytes === "number"
+          ? input.resumableThresholdBytes
+          : existing.resumableThresholdBytes,
       updatedAt,
     })
     .where(eq(appSettings.id, "global"))
@@ -1396,6 +1539,7 @@ export async function updateAppSettings(input: {
     supportEnabled: row.supportEnabled,
     signupsEnabled: row.signupsEnabled,
     uploadsEnabled: row.uploadsEnabled,
+    resumableThresholdBytes: row.resumableThresholdBytes,
     updatedAt: row.updatedAt.toISOString(),
   };
 }

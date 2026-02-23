@@ -35,7 +35,7 @@ export default function AlbumShareView({
         {images.map((image) => (
           <div key={image.id} className="rounded-md border border-neutral-200 p-4">
             <img
-              src={`/share/album/${shareId}/image/${image.id}/${image.baseName}-lg.${image.ext}`}
+              src={`/share/album/${shareId}/image/${image.id}/lg.${image.ext}`}
               alt="Shared album image"
               className="w-full rounded border border-neutral-200 object-contain"
             />

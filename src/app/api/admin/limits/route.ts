@@ -34,6 +34,10 @@ export async function POST(request: Request): Promise<NextResponse> {
     groupId?: string | null;
     limits?: {
       maxFileSize?: number;
+      maxImageSize?: number;
+      maxVideoSize?: number;
+      maxDocumentSize?: number;
+      maxOtherSize?: number;
       allowedTypes?: string[];
       rateLimitPerMinute?: number;
     };
@@ -44,11 +48,18 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   const maxFileSize = Number(payload.limits.maxFileSize ?? 0);
+  const maxImageSize = Number(payload.limits.maxImageSize ?? maxFileSize);
+  const maxVideoSize = Number(payload.limits.maxVideoSize ?? maxFileSize);
+  const maxDocumentSize = Number(payload.limits.maxDocumentSize ?? maxFileSize);
+  const maxOtherSize = Number(payload.limits.maxOtherSize ?? maxFileSize);
   const allowedTypes = (payload.limits.allowedTypes ?? []).map((item) => item.trim());
   const rateLimitPerMinute = Number(payload.limits.rateLimitPerMinute ?? 0);
 
   if (!Number.isFinite(maxFileSize) || maxFileSize <= 0) {
     return NextResponse.json({ error: "Max file size must be greater than 0." }, { status: 400 });
+  }
+  if (![maxImageSize, maxVideoSize, maxDocumentSize, maxOtherSize].every((value) => Number.isFinite(value) && value > 0)) {
+    return NextResponse.json({ error: "All per-type max sizes must be greater than 0." }, { status: 400 });
   }
 
   if (!Number.isFinite(rateLimitPerMinute) || rateLimitPerMinute < 0) {
@@ -58,6 +69,10 @@ export async function POST(request: Request): Promise<NextResponse> {
   const limits = await upsertGroupLimits({
     groupId: payload.groupId ?? null,
     maxFileSize,
+    maxImageSize,
+    maxVideoSize,
+    maxDocumentSize,
+    maxOtherSize,
     allowedTypes,
     rateLimitPerMinute,
   });

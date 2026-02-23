@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { uploadSingleImage } from "@/lib/upload-client";
+import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
 import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
 import { LightCaretRight } from '@energiz3r/icon-library/Icons/Light/LightCaretRight';
@@ -13,33 +13,63 @@ import { LightRedo } from '@energiz3r/icon-library/Icons/Light/LightRedo';
 import { LightArrowAltUp } from '@energiz3r/icon-library/Icons/Light/LightArrowAltUp';
 import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArrowAltDown';
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
+import { LightClock } from '@energiz3r/icon-library/Icons/Light/LightClock';
+import { LightFilePdf } from '@energiz3r/icon-library/Icons/Light/LightFilePdf';
+import { LightFileArchive } from '@energiz3r/icon-library/Icons/Light/LightFileArchive';
+import { LightPlayCircle } from '@energiz3r/icon-library/Icons/Light/LightPlayCircle';
 
 import { SharePill } from "./share-pill";
-import { DitherEditor } from "./dither-editor";
 import { DitherIcon } from "./icons/dither";
+import { ImageViewerContent } from "./viewers/image-viewer-content";
+import { FileViewerContent } from "./viewers/file-viewer-content";
 
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "latex-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 const INTERNAL_IMAGE_DRAG_TYPE = "application/x-latex-image-id";
+const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
+
+function isArchiveLike(input: { ext?: string; mimeType?: string; kind?: string }): boolean {
+  if (input.kind !== "other") {
+    return false;
+  }
+  const ext = (input.ext ?? "").toLowerCase();
+  const mime = (input.mimeType ?? "").toLowerCase();
+  if (ARCHIVE_EXTENSIONS.has(ext)) {
+    return true;
+  }
+  return (
+    mime.includes("zip") ||
+    mime.includes("7z") ||
+    mime.includes("gzip") ||
+    mime.includes("x-tar") ||
+    mime.includes("rar") ||
+    mime.includes("bzip") ||
+    mime.includes("xz")
+  );
+}
 
 type GalleryImage = {
   id: string;
+  kind: "image" | "video" | "document" | "other";
   baseName: string;
   ext: string;
+  mimeType?: string;
   albumId?: string;
   albumCaption?: string;
   albumOrder?: number;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   sizeOriginal?: number;
   sizeSm?: number;
   sizeLg?: number;
+  previewStatus?: "pending" | "ready" | "failed";
   uploadedAt: string;
   shared?: boolean;
 };
 
 type ShareInfo = {
   id: string;
+  kind?: "image" | "video" | "document" | "other";
   urls: {
     original: string;
     sm: string;
@@ -56,19 +86,23 @@ type UploadMessage = {
 type RotationDirection = "left" | "right";
 
 export default function GalleryClient({
-  images,
+  media,
   onImagesChange,
   showAlbumImageToggle = true,
   uploadAlbumId,
   hideImagesInAlbums = false,
+  kindFilter = "all",
+  resumableThresholdBytes = DEFAULT_RESUMABLE_THRESHOLD,
 }: {
-  images: GalleryImage[];
+  media: GalleryImage[];
   onImagesChange?: (next: GalleryImage[]) => void;
   showAlbumImageToggle?: boolean;
   uploadAlbumId?: string;
   hideImagesInAlbums?: boolean;
+  kindFilter?: "all" | "image" | "video" | "document" | "other";
+  resumableThresholdBytes?: number;
 }) {
-  const [items, setItems] = useState<GalleryImage[]>(images);
+  const [items, setItems] = useState<GalleryImage[]>(media);
   const [active, setActive] = useState<GalleryImage | null>(null);
   const [share, setShare] = useState<ShareInfo | null>(null);
   const [shareError, setShareError] = useState<string | null>(null);
@@ -90,6 +124,8 @@ export default function GalleryClient({
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [isDitherOpen, setIsDitherOpen] = useState(false);
   const [ditherError, setDitherError] = useState<string | null>(null);
+  const [previewActionError, setPreviewActionError] = useState<string | null>(null);
+  const [isRegeneratingVideoPreview, setIsRegeneratingVideoPreview] = useState(false);
   const [albumEditError, setAlbumEditError] = useState<string | null>(null);
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -103,8 +139,8 @@ export default function GalleryClient({
   const inAlbumContext = Boolean(uploadAlbumId);
 
   useEffect(() => {
-    setItems(images);
-  }, [images]);
+    setItems((current) => (current === media ? current : media));
+  }, [media]);
 
   useEffect(() => {
     if (!showAlbumImageToggle) {
@@ -215,15 +251,19 @@ export default function GalleryClient({
 
   const filteredItems = useMemo(
     () => {
+      let next = items;
+      if (kindFilter !== "all") {
+        next = next.filter((image) => image.kind === kindFilter);
+      }
       if (hideImagesInAlbums) {
-        return items.filter((image) => !image.albumId);
+        next = next.filter((image) => !image.albumId);
       }
       if (showAlbumImageToggle && !showAlbumImages) {
-        return items.filter((image) => !image.albumId);
+        next = next.filter((image) => !image.albumId);
       }
-      return items;
+      return next;
     },
-    [hideImagesInAlbums, items, showAlbumImageToggle, showAlbumImages],
+    [hideImagesInAlbums, items, kindFilter, showAlbumImageToggle, showAlbumImages],
   );
 
   const displayItems = useMemo(
@@ -231,11 +271,12 @@ export default function GalleryClient({
       filteredItems.map((image) => {
         const cacheBust = imageVersionBumps[image.id];
         const cacheBustSuffix = cacheBust ? `?v=${cacheBust}` : "";
+        const previewExt = image.kind === "image" ? image.ext : "png";
         return {
           ...image,
-          thumbUrl: `/image/${image.id}/${image.baseName}-sm.${image.ext}${cacheBustSuffix}`,
-          fullUrl: `/image/${image.id}/${image.baseName}.${image.ext}${cacheBustSuffix}`,
-          lgUrl: `/image/${image.id}/${image.baseName}-lg.${image.ext}${cacheBustSuffix}`,
+          thumbUrl: `/media/${image.kind}/${image.id}/${image.baseName}-sm.${previewExt}${cacheBustSuffix}`,
+          fullUrl: `/media/${image.kind}/${image.id}/${image.baseName}.${image.ext}${cacheBustSuffix}`,
+          lgUrl: `/media/${image.kind}/${image.id}/${image.baseName}-lg.${previewExt}${cacheBustSuffix}`,
         };
       }),
     [filteredItems, imageVersionBumps],
@@ -246,6 +287,14 @@ export default function GalleryClient({
     () => Array.from(selected).filter((id) => visibleIds.has(id)),
     [selected, visibleIds],
   );
+  const selectedMediaItems = useMemo(
+    () =>
+      selectedIds
+        .map((id) => items.find((item) => item.id === id))
+        .filter(Boolean)
+        .map((item) => ({ id: item!.id, kind: item!.kind })),
+    [items, selectedIds],
+  );
   const activeIndex = useMemo(() => {
     if (!active) {
       return -1;
@@ -255,7 +304,9 @@ export default function GalleryClient({
   const hasPrevious = activeIndex > 0;
   const hasNext = activeIndex >= 0 && activeIndex < displayItems.length - 1;
   const activeDisplayItem = activeIndex >= 0 ? displayItems[activeIndex] : null;
-  const canRotateActive = active ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
+  const isImageActive = active?.kind === "image";
+  const canRotateActive =
+    active && isImageActive ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
 
   function pushMessage(text: string, tone: UploadMessage["tone"]) {
     const entry: UploadMessage = {
@@ -270,18 +321,25 @@ export default function GalleryClient({
   }
 
   async function uploadFiles(files: FileList | File[]) {
-    const itemsToUpload = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const itemsToUpload = Array.from(files);
     if (itemsToUpload.length === 0) {
-      pushMessage("Please drop image files.", "error");
+      pushMessage("Please drop files.", "error");
       return;
     }
 
     for (const file of itemsToUpload) {
-      const result = await uploadSingleImage(file, uploadAlbumId);
+      if (file.size >= resumableThresholdBytes) {
+        window.alert(
+          `${file.name} is too large for quick gallery upload. Use the Upload page for large/resumable uploads.`,
+        );
+        pushMessage(`${file.name}: use Upload page for large files.`, "error");
+        continue;
+      }
+      const result = await uploadSingleMedia(file, uploadAlbumId);
       pushMessage(result.message, result.ok ? "success" : "error");
 
-      if (result.ok && result.image) {
-        setItems((current) => [result.image as GalleryImage, ...current]);
+      if (result.ok && result.media) {
+        setItems((current) => [result.media as GalleryImage, ...current]);
       }
     }
   }
@@ -295,11 +353,14 @@ export default function GalleryClient({
     setShareError(null);
     setRotateError(null);
     setAlbumEditError(null);
+    setPreviewActionError(null);
     setHas640Variant(null);
     setIsChecking640(false);
 
     try {
-      const response = await fetch(`/api/shares?imageId=${image.id}`);
+      const response = await fetch(
+        `/api/media-shares?kind=${encodeURIComponent(image.kind)}&mediaId=${encodeURIComponent(image.id)}`,
+      );
 
       if (!response.ok) {
         const payload = (await response.json()) as { error?: string };
@@ -317,7 +378,9 @@ export default function GalleryClient({
             item.id === image.id ? { ...item, shared: true } : item,
           ),
         );
-        void check640Variant(image.id);
+        if (image.kind === "image") {
+          void check640Variant(image.id);
+        }
       }
     } catch (error) {
       setShareError(error instanceof Error ? error.message : "Unable to load share info.");
@@ -333,8 +396,63 @@ export default function GalleryClient({
     setShareError(null);
     setRotateError(null);
     setAlbumEditError(null);
+    setPreviewActionError(null);
     setHas640Variant(null);
     setIsChecking640(false);
+  }
+
+  async function regenerateVideoThumbnail() {
+    if (!active || active.kind !== "video" || isRegeneratingVideoPreview) {
+      return;
+    }
+    setPreviewActionError(null);
+    setIsRegeneratingVideoPreview(true);
+    const mediaId = active.id;
+    setItems((current) =>
+      current.map((item) =>
+        item.id === mediaId ? { ...item, previewStatus: "pending" } : item,
+      ),
+    );
+    setActive((current) =>
+      current?.id === mediaId ? { ...current, previewStatus: "pending" } : current,
+    );
+    try {
+      const response = await fetch("/api/media/video-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mediaId }),
+      });
+      const payload = (await response.json()) as { error?: string; previewStatus?: "pending" | "ready" | "failed" };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Unable to regenerate thumbnail.");
+      }
+      const nextStatus = payload.previewStatus ?? "ready";
+      setItems((current) =>
+        current.map((item) =>
+          item.id === mediaId ? { ...item, previewStatus: nextStatus } : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === mediaId ? { ...current, previewStatus: nextStatus } : current,
+      );
+      setImageVersionBumps((current) => ({
+        ...current,
+        [mediaId]: Date.now(),
+      }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to regenerate thumbnail.";
+      setPreviewActionError(message);
+      setItems((current) =>
+        current.map((item) =>
+          item.id === mediaId ? { ...item, previewStatus: "failed" } : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === mediaId ? { ...current, previewStatus: "failed" } : current,
+      );
+    } finally {
+      setIsRegeneratingVideoPreview(false);
+    }
   }
 
   function openPreviousImage() {
@@ -381,10 +499,10 @@ export default function GalleryClient({
 
   async function enableShare(image: GalleryImage): Promise<ShareInfo | null> {
     setShareError(null);
-    const response = await fetch("/api/shares", {
+    const response = await fetch("/api/media-shares", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageId: image.id }),
+      body: JSON.stringify({ kind: image.kind, mediaId: image.id }),
     });
 
     if (!response.ok) {
@@ -396,7 +514,9 @@ export default function GalleryClient({
     const payload = (await response.json()) as { share: { id: string }; urls: ShareInfo["urls"] };
     const nextShare = { id: payload.share.id, urls: payload.urls };
     setShare(nextShare);
-    void check640Variant(image.id);
+    if (image.kind === "image") {
+      void check640Variant(image.id);
+    }
     setItems((current) =>
       current.map((item) =>
         item.id === image.id ? { ...item, shared: true } : item,
@@ -407,10 +527,10 @@ export default function GalleryClient({
 
   async function disableShare(image: GalleryImage) {
     setShareError(null);
-    const response = await fetch("/api/shares", {
+    const response = await fetch("/api/media-shares", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageId: image.id }),
+      body: JSON.stringify({ kind: image.kind, mediaId: image.id }),
     });
 
     if (!response.ok) {
@@ -430,6 +550,10 @@ export default function GalleryClient({
   }
 
   async function generate640Link(image: GalleryImage) {
+    if (image.kind !== "image") {
+      setShareError("640 variant links are only available for images.");
+      return;
+    }
     if (!share) {
       setShareError("Enable sharing to create a 640x480 link.");
       return;
@@ -741,12 +865,12 @@ export default function GalleryClient({
 
   async function runBulkAction(action: string, extra?: Record<string, string>) {
     setBulkError(null);
-    const response = await fetch("/api/images/bulk", {
+    const response = await fetch("/api/media/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action,
-        imageIds: selectedIds,
+        mediaItems: selectedMediaItems,
         ...extra,
       }),
     });
@@ -802,10 +926,10 @@ export default function GalleryClient({
 
   async function deleteSingleImage(image: GalleryImage) {
     setDeleteError(null);
-    const response = await fetch("/api/images/bulk", {
+    const response = await fetch("/api/media/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", imageIds: [image.id] }),
+      body: JSON.stringify({ action: "delete", mediaItems: [{ id: image.id, kind: image.kind }] }),
     });
 
     if (!response.ok) {
@@ -830,10 +954,57 @@ export default function GalleryClient({
   }
 
   useEffect(() => {
-    if (onImagesChange) {
-      onImagesChange(items);
+    if (!onImagesChange) {
+      return;
     }
-  }, [items, onImagesChange]);
+    if (items === media) {
+      return;
+    }
+    onImagesChange(items);
+  }, [items, media, onImagesChange]);
+
+  useEffect(() => {
+    const pending = items.filter((item) => item.kind === "video" && item.previewStatus === "pending");
+    if (pending.length === 0) {
+      return;
+    }
+    let isMounted = true;
+    const interval = window.setInterval(() => {
+      const targets = pending.slice(0, 10);
+      void Promise.all(
+        targets.map(async (item) => {
+          const response = await fetch(
+            `/api/media/preview-status?kind=${encodeURIComponent(item.kind)}&mediaId=${encodeURIComponent(item.id)}`,
+            { cache: "no-store" },
+          );
+          if (!response.ok) {
+            return;
+          }
+          const payload = (await response.json()) as { previewStatus?: "pending" | "ready" | "failed" };
+          if (!payload.previewStatus || !isMounted) {
+            return;
+          }
+          setItems((current) =>
+            {
+              let changed = false;
+              const next = current.map((media) => {
+                if (media.id === item.id && media.previewStatus !== payload.previewStatus) {
+                  changed = true;
+                  return { ...media, previewStatus: payload.previewStatus };
+                }
+                return media;
+              });
+              return changed ? next : current;
+            },
+          );
+        }),
+      );
+    }, 5000);
+    return () => {
+      isMounted = false;
+      window.clearInterval(interval);
+    };
+  }, [items]);
 
   useEffect(() => {
     if (!active) {
@@ -880,7 +1051,7 @@ export default function GalleryClient({
       {globalDragging ? (
         <div className="pointer-events-none fixed inset-0 z-40 flex items-center justify-center bg-black/30">
           <div className="rounded border border-dashed border-white px-6 py-4 text-sm text-white">
-            Drop images to upload
+            Drop files to upload
           </div>
         </div>
       ) : null}
@@ -948,8 +1119,8 @@ export default function GalleryClient({
       {displayItems.length === 0 ? (
         <div className="rounded-md border border-dashed border-neutral-300 p-6 text-center text-neutral-500">
           {items.length === 0
-            ? "No uploads yet. Drop images anywhere on this page or head to the upload page."
-            : "No images to show with the current filter."}
+            ? "No uploads yet. Drop files anywhere on this page or head to the upload page."
+            : "No files to show with the current filter."}
         </div>
       ) : (
         <div className="grid justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,320px))] [grid-template-columns:repeat(auto-fit,minmax(240px,100%))]">
@@ -1021,19 +1192,43 @@ export default function GalleryClient({
                 <LightTrashAlt className="h-4 w-4" fill="currentColor" />
               </button>
               <button type="button" onClick={() => openModal(image)} className="block w-full">
-                <img
-                  src={image.thumbUrl}
-                  alt="Uploaded"
-                  className="sm:h-48 max-h-64 w-full object-cover mt-2"
-                  loading="lazy"
-                  draggable={false}
-                  onDragStart={(event) => event.preventDefault()}
-                />
+                {image.kind === "video" && image.previewStatus !== "ready" ? (
+                  <div className="mt-2 flex h-48 max-h-64 w-full items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50">
+                    <div className="flex flex-col items-center gap-2 text-xs text-neutral-500">
+                      <LightClock className="h-8 w-8" fill="currentColor" />
+                      <span>preview pending</span>
+                    </div>
+                  </div>
+                ) : image.kind === "other" ? (
+                  <div className="mt-2 flex h-48 max-h-64 w-full items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50">
+                    {isArchiveLike(image) ? (
+                      <LightFileArchive className="h-10 w-10 text-neutral-500" fill="currentColor" />
+                    ) : (
+                      <LightFilePdf className="h-10 w-10 text-neutral-500" fill="currentColor" />
+                    )}
+                  </div>
+                ) : (
+                  <div className="relative mt-2">
+                    <img
+                      src={image.thumbUrl}
+                      alt="Uploaded"
+                      className="sm:h-48 max-h-64 w-full object-cover"
+                      loading="lazy"
+                      draggable={false}
+                      onDragStart={(event) => event.preventDefault()}
+                    />
+                    {image.kind === "video" ? (
+                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                        <LightPlayCircle className="h-12 w-12 text-white/75 drop-shadow-[0_1px_2px_rgba(0,0,0,0.55)]" fill="currentColor" opacity={0.5} />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
               </button>
               <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
                 <span className="truncate">{image.baseName}</span>
                 <span>
-                  {image.width}×{image.height}
+                  {image.width && image.height ? `${image.width}×${image.height}` : image.kind}
                 </span>
               </div>
               {inAlbumContext && image.albumCaption ? (
@@ -1070,7 +1265,7 @@ export default function GalleryClient({
           <div className="max-h-full w-full max-w-3xl overflow-y-auto overflow-x-hidden sm:rounded-md bg-white p-2 sm:p-6 text-sm">
             <div className="flex sm:flex-row flex-col items-start justify-between gap-4">
               <div>
-                <h2 className="text-lg font-semibold">img details</h2>
+                <h2 className="text-lg font-semibold">file details</h2>
                 <p className="text-xs text-neutral-500">{active.baseName}</p>
                 {activeIndex >= 0 ? (
                   <p className="text-xs text-neutral-500">
@@ -1117,51 +1312,55 @@ export default function GalleryClient({
                     </button>
                   </>
                 ) : null}
-                <button
-                  type="button"
-                  onClick={() => void rotateImage("left")}
-                  disabled={!canRotateActive || isRotating}
-                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
-                  aria-label="Rotate image left"
-                  title={
-                    canRotateActive
-                      ? "Rotate left 90 degrees"
-                      : "Rotation is only available for JPG and PNG images."
-                  }
-                >
-                  <LightUndo className="h-4 w-4" fill="currentColor" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void rotateImage("right")}
-                  disabled={!canRotateActive || isRotating}
-                  className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
-                  aria-label="Rotate image right"
-                  title={
-                    canRotateActive
-                      ? "Rotate right 90 degrees"
-                      : "Rotation is only available for JPG and PNG images."
-                  }
-                >
-                  <LightRedo className="h-4 w-4" fill="currentColor" />
-                </button>
+                {isImageActive ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => void rotateImage("left")}
+                      disabled={!canRotateActive || isRotating}
+                      className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
+                      aria-label="Rotate image left"
+                      title={
+                        canRotateActive
+                          ? "Rotate left 90 degrees"
+                          : "Rotation is only available for JPG and PNG images."
+                      }
+                    >
+                      <LightUndo className="h-4 w-4" fill="currentColor" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void rotateImage("right")}
+                      disabled={!canRotateActive || isRotating}
+                      className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:border-neutral-200 disabled:text-neutral-300"
+                      aria-label="Rotate image right"
+                      title={
+                        canRotateActive
+                          ? "Rotate right 90 degrees"
+                          : "Rotation is only available for JPG and PNG images."
+                      }
+                    >
+                      <LightRedo className="h-4 w-4" fill="currentColor" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDitherError(null);
+                        setIsDitherOpen((current) => !current);
+                      }}
+                      className={`rounded border px-2 py-1 text-xs ${
+                        isDitherOpen ? "border-black bg-black text-white" : "border-neutral-200"
+                      }`}
+                      title="Open dither controls"
+                    >
+                      <DitherIcon className="h-4 w-4" fill="currentColor" />
+                    </button>
+                  </>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
-                    setDitherError(null);
-                    setIsDitherOpen((current) => !current);
-                  }}
-                  className={`rounded border px-2 py-1 text-xs ${
-                    isDitherOpen ? "border-black bg-black text-white" : "border-neutral-200"
-                  }`}
-                  title="Open dither controls"
-                >
-                  <DitherIcon className="h-4 w-4" fill="currentColor" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const downloadUrl = `/image/${active.id}/${active.baseName}.${active.ext}`;
+                    const downloadUrl = `/media/${active.kind}/${active.id}/${active.baseName}.${active.ext}`;
                     const link = document.createElement("a");
                     link.href = downloadUrl;
                     link.download = `${active.baseName}.${active.ext}`;
@@ -1187,16 +1386,17 @@ export default function GalleryClient({
 
             <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[2fr,1fr]">
               <div className="space-y-3">
-                {isDitherOpen ? (
-                  <DitherEditor
-                    imageUrl={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
+                {active.kind === "image" ? (
+                  <ImageViewerContent
+                    imageUrl={activeDisplayItem?.lgUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}-lg.${active.ext}`}
                     imageName={active.baseName}
                     outputExt={active.ext}
-                    onCancel={() => {
+                    isDitherOpen={isDitherOpen}
+                    onCancelDither={() => {
                       setDitherError(null);
                       setIsDitherOpen(false);
                     }}
-                    onSave={async (blob) => {
+                    onSaveDither={async (blob) => {
                       try {
                         await handleDitherSave(blob);
                       } catch (error) {
@@ -1204,7 +1404,7 @@ export default function GalleryClient({
                         throw error;
                       }
                     }}
-                    onSaveCopy={async (blob) => {
+                    onSaveCopyDither={async (blob) => {
                       try {
                         await handleDitherSaveCopy(blob);
                       } catch (error) {
@@ -1216,10 +1416,17 @@ export default function GalleryClient({
                     }}
                   />
                 ) : (
-                  <img
-                    src={activeDisplayItem?.lgUrl ?? `/image/${active.id}/${active.baseName}-lg.${active.ext}`}
-                    alt="Uploaded"
-                    className="sm:max-h-[60vh] w-full rounded border border-neutral-200 object-contain"
+                  <FileViewerContent
+                    kind={active.kind}
+                    previewStatus={active.previewStatus}
+                    fullUrl={activeDisplayItem?.fullUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}.${active.ext}`}
+                    previewUrl={activeDisplayItem?.lgUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}-lg.png`}
+                    ext={active.ext}
+                    mimeType={active.mimeType}
+                    onRegenerateThumbnail={
+                      active.kind === "video" ? () => void regenerateVideoThumbnail() : undefined
+                    }
+                    isRegeneratingThumbnail={active.kind === "video" ? isRegeneratingVideoPreview : false}
                   />
                 )}
               </div>
@@ -1227,7 +1434,9 @@ export default function GalleryClient({
               <div className="min-w-0 space-y-3">
                 <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2 rounded border border-neutral-200 p-3 text-xs text-neutral-600">
                   <div className="min-w-0">
-                    <div>Dimensions: {active.width}×{active.height}</div>
+                    <div>
+                      Dimensions: {active.width && active.height ? `${active.width}×${active.height}` : "n/a"}
+                    </div>
                     <div>File size: {formatBytes(active.sizeOriginal)}</div>
                     <div>Uploaded: {new Date(active.uploadedAt).toLocaleString()}</div>
                   </div>
@@ -1251,6 +1460,7 @@ export default function GalleryClient({
                 {shareError ? <p className="text-xs text-red-600">{shareError}</p> : null}
                 {rotateError ? <p className="text-xs text-red-600">{rotateError}</p> : null}
                 {ditherError ? <p className="text-xs text-red-600">{ditherError}</p> : null}
+                {previewActionError ? <p className="text-xs text-red-600">{previewActionError}</p> : null}
                 {albumEditError ? <p className="text-xs text-red-600">{albumEditError}</p> : null}
 
                 {inAlbumContext ? (
@@ -1324,39 +1534,41 @@ export default function GalleryClient({
                       </button>
                     </div>
 
-                    <div className="space-y-2">
-                      <label className="text-xs font-medium text-neutral-600">
-                        Direct link (max size 640x480)
-                      </label>
-                      {isChecking640 ? (
-                        <div className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs text-neutral-500">
-                          Checking 640x480 variant...
-                        </div>
-                      ) : has640Variant ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            copyText(
-                              `${origin}${to640VariantUrl(share.urls.original)}`,
-                              "640",
-                            )
-                          }
-                          className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "640" ? "text-emerald-600" : ""}`}
-                        >
-                          {copied === "640" ? "Copied link to clipboard!" : 
-                          `${origin}${to640VariantUrl(share.urls.original)}`}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void generate640Link(active)}
-                          disabled={isGenerating640}
-                          className="w-full rounded border border-neutral-200 px-3 py-2 text-xs disabled:opacity-50"
-                        >
-                          {isGenerating640 ? "Generating..." : "Generate 640x480 image"}
-                        </button>
-                      )}
-                    </div>
+                    {active.kind === "image" ? (
+                      <div className="space-y-2">
+                        <label className="text-xs font-medium text-neutral-600">
+                          Direct link (max size 640x480)
+                        </label>
+                        {isChecking640 ? (
+                          <div className="w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs text-neutral-500">
+                            Checking 640x480 variant...
+                          </div>
+                        ) : has640Variant ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              copyText(
+                                `${origin}${to640VariantUrl(share.urls.original)}`,
+                                "640",
+                              )
+                            }
+                            className={`w-full max-w-full break-all rounded border border-neutral-200 px-3 py-2 text-left text-xs ${copied === "640" ? "text-emerald-600" : ""}`}
+                          >
+                            {copied === "640" ? "Copied link to clipboard!" :
+                            `${origin}${to640VariantUrl(share.urls.original)}`}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void generate640Link(active)}
+                            disabled={isGenerating640}
+                            className="w-full rounded border border-neutral-200 px-3 py-2 text-xs disabled:opacity-50"
+                          >
+                            {isGenerating640 ? "Generating..." : "Generate 640x480 image"}
+                          </button>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-xs text-neutral-500 text-center">
@@ -1374,7 +1586,7 @@ export default function GalleryClient({
           <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
             <h3 className="text-lg font-semibold">Add to album</h3>
             <p className="mt-1 text-xs text-neutral-500">
-              Choose an album to add {selectedIds.length} image
+              Choose an album to add {selectedIds.length} file
               {selectedIds.length === 1 ? "" : "s"} to.
             </p>
             <select
@@ -1415,7 +1627,7 @@ export default function GalleryClient({
           <div className="w-full max-w-md rounded-md bg-white p-6 text-sm">
             <h3 className="text-lg font-semibold">Delete image?</h3>
             <p className="mt-1 text-xs text-neutral-500">
-              This will permanently delete the image and its share links.
+              This will permanently delete the file and its share links.
             </p>
             {deleteError ? (
               <p className="mt-2 text-xs text-red-600">{deleteError}</p>
@@ -1433,7 +1645,7 @@ export default function GalleryClient({
                 onClick={() => void deleteSingleImage(imageToDelete)}
                 className="rounded bg-red-600 px-3 py-1 text-xs text-white"
               >
-                Delete image
+                Delete file
               </button>
             </div>
           </div>

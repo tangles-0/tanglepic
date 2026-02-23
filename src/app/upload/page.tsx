@@ -18,24 +18,21 @@ export default async function UploadPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-3xl flex-col gap-6 px-6 py-10 text-sm">
       <PageHeader
-        title="Upload images"
+        title="Upload files"
         subtitle={`Logged in as ${session.user.email ?? "user"}.`}
+        backLink={{ href: "/gallery", label: "back 2 gallery" }}
       />
 
       {!settings.uploadsEnabled ? (
         <AlertBanner>Uploads are currently disabled by the administrator.</AlertBanner>
       ) : null}
 
-      <UploadDropzone uploadsEnabled={settings.uploadsEnabled} />
+      <UploadDropzone
+        uploadsEnabled={settings.uploadsEnabled}
+        resumableThresholdBytes={settings.resumableThresholdBytes}
+      />
 
-      <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
-        <TextLink href="/gallery" className="text-sm">
-          &lt; back 2 gallery
-        </TextLink>
-        <TextLink href="/signout" className="text-sm">
-          sign out
-        </TextLink>
-      </div>
+      
     </main>
   );
 }

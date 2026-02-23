@@ -2,11 +2,12 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import {
+  getAppSettings,
   getAlbumForUser,
   getLatestPatchNote,
   getUserLastPatchNoteDismissed,
-  listImagesForAlbum,
 } from "@/lib/metadata-store";
+import { listMediaForAlbum } from "@/lib/media-store";
 import GalleryClient from "@/components/gallery-client";
 import AlbumShareControls from "@/components/album-share-controls";
 import PatchNoteBanner from "@/components/patch-note-banner";
@@ -29,10 +30,11 @@ export default async function AlbumPage({
     redirect("/gallery");
   }
 
-  const [images, latestPatchNote, dismissedAt] = await Promise.all([
-    listImagesForAlbum(userId, albumId),
+  const [media, latestPatchNote, dismissedAt, settings] = await Promise.all([
+    listMediaForAlbum(userId, albumId),
     getLatestPatchNote(),
     getUserLastPatchNoteDismissed(userId),
+    getAppSettings(),
   ]);
   const shouldShowPatchBanner =
     latestPatchNote &&
@@ -42,10 +44,10 @@ export default async function AlbumPage({
     <main className="flex min-h-screen w-full flex-col gap-6 px-2 sm:px-6 py-2 sm:py-10 text-sm">
       <PageHeader
         title={album.name}
-        subtitle={`${images.length} image${images.length === 1 ? "" : "s"} in this album.`}
+        subtitle={`${media.length} file${media.length === 1 ? "" : "s"} in this album.`}
         backLink={{ href: "/gallery?tab=albums", label: "cd .. (albums)" }}
       >
-        {images.length === 0 ? (
+        {media.length === 0 ? (
           <p className="text-xs text-neutral-500">
             go 2 the imgs tab, select some imgs, then choose “add 2 album”.
           </p>
@@ -62,9 +64,10 @@ export default async function AlbumPage({
       <AlbumShareControls albumId={albumId} />
 
       <GalleryClient
-        images={images}
+        media={media}
         showAlbumImageToggle={false}
         uploadAlbumId={albumId}
+        resumableThresholdBytes={settings.resumableThresholdBytes}
       />
     </main>
   );

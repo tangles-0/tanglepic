@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { getSessionUserId } from "@/lib/auth";
 import {
-  addImage,
   getAlbumForUser,
   getAppSettings,
   getGroupLimits,
@@ -8,8 +8,9 @@ import {
   getUserGroupInfo,
   isAdminUser,
 } from "@/lib/metadata-store";
-import { storeImageAndThumbnails } from "@/lib/storage";
-import { getSessionUserId } from "@/lib/auth";
+import { addMediaForUser } from "@/lib/media-store";
+import { extFromFileName, mediaKindFromType } from "@/lib/media-types";
+import { storeGenericMediaFromBuffer, storeImageMediaFromBuffer } from "@/lib/media-storage";
 
 export const runtime = "nodejs";
 
@@ -69,36 +70,34 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const formData = await request.formData();
   const file = formData.get("file");
-  const albumId = formData.get("albumId")?.toString() || undefined;
-
+  const albumId = formData.get("albumId")?.toString().trim() || undefined;
   if (!(file instanceof File)) {
-    return NextResponse.json({ error: "Image file is required." }, { status: 400 });
+    return NextResponse.json({ error: "File is required." }, { status: 400 });
   }
-
-  if (!file.type.startsWith("image/")) {
-    return NextResponse.json({ error: "File must be an image." }, { status: 400 });
+  if (!file.type) {
+    return NextResponse.json({ error: "File type is required." }, { status: 400 });
   }
-
+  const ext = extFromFileName(file.name);
+  if (!ext) {
+    return NextResponse.json({ error: "File extension is required." }, { status: 400 });
+  }
+  const kind = mediaKindFromType(file.type, ext);
   if (!isAllowedType(groupLimits.allowedTypes, file.type)) {
     return NextResponse.json({ error: "File type is not allowed." }, { status: 415 });
   }
-
-  if (file.size > getMaxAllowedBytesForKind(groupLimits, "image")) {
+  const maxAllowedBytes = getMaxAllowedBytesForKind(groupLimits, kind);
+  if (file.size > maxAllowedBytes) {
     return NextResponse.json({ error: "File exceeds size limit." }, { status: 413 });
   }
-
   const rateResult = checkRateLimit(userId, groupLimits.rateLimitPerMinute);
   if (!rateResult.allowed && !isAdmin) {
     return NextResponse.json({ error: "Rate limit exceeded." }, { status: 429 });
   }
-
   if (isAdmin && defaultLimits.rateLimitPerMinute > 0) {
     const adminRate = checkRateLimit(`admin:${userId}`, defaultLimits.rateLimitPerMinute);
     if (!adminRate.allowed) {
       // eslint-disable-next-line no-console
-      console.warn(
-        `Admin user ${userId} exceeded default rate limit (${defaultLimits.rateLimitPerMinute}/min).`,
-      );
+      console.warn(`Admin user ${userId} exceeded default rate limit.`);
     }
   }
 
@@ -111,21 +110,56 @@ export async function POST(request: Request): Promise<NextResponse> {
 
   const uploadedAt = new Date();
   const buffer = Buffer.from(await file.arrayBuffer());
-  const stored = await storeImageAndThumbnails(buffer, uploadedAt);
 
-  const image = await addImage({
+  const stored =
+    kind === "image"
+      ? await storeImageMediaFromBuffer({
+          buffer,
+          ext,
+          mimeType: file.type,
+          uploadedAt,
+        })
+      : await storeGenericMediaFromBuffer({
+          kind: kind === "video" ? "video" : kind === "document" ? "document" : "other",
+          buffer,
+          ext,
+          mimeType: file.type,
+          uploadedAt,
+          deferPreview: kind === "video",
+        });
+
+  const media = await addMediaForUser({
     userId,
+    kind,
     albumId,
     baseName: stored.baseName,
     ext: stored.ext,
+    mimeType: stored.mimeType,
     width: stored.width,
     height: stored.height,
     sizeOriginal: stored.sizeOriginal,
     sizeSm: stored.sizeSm,
     sizeLg: stored.sizeLg,
+    previewStatus: stored.previewStatus,
     uploadedAt: uploadedAt.toISOString(),
   });
 
-  return NextResponse.json({ image });
+  if (media.kind === "video" && media.previewStatus === "pending") {
+    const triggerUrl = new URL("/api/media/video-preview", request.url);
+    const cookie = request.headers.get("cookie");
+    void fetch(triggerUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(cookie ? { cookie } : {}),
+      },
+      body: JSON.stringify({ mediaId: media.id }),
+      cache: "no-store",
+    }).catch(() => {
+      // Best-effort background kickoff; polling will keep UI accurate.
+    });
+  }
+
+  return NextResponse.json({ media });
 }
 

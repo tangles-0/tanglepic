@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { getAlbumShareById, getImage } from "@/lib/metadata-store";
-import { getImageBuffer } from "@/lib/storage";
+import { getMediaBuffer } from "@/lib/media-storage";
 import { unavailableImageResponse } from "@/lib/unavailable-image";
 
 export const runtime = "nodejs";
@@ -19,18 +19,15 @@ function contentTypeForExt(ext: string): string {
 }
 
 function parseFileName(fileName: string): {
-  baseName: string;
   size: "original" | "sm" | "lg" | "x640";
   ext: string;
 } | null {
-  const match = /^(.*?)(-sm|-lg|-640)?\.([a-zA-Z0-9]+)$/.exec(fileName);
+  const match = /^(original|sm|lg|x640)\.([a-zA-Z0-9]+)$/.exec(fileName);
   if (!match) {
     return null;
   }
-  const suffix = match[2];
-  const size =
-    suffix === "-sm" ? "sm" : suffix === "-lg" ? "lg" : suffix === "-640" ? "x640" : "original";
-  return { baseName: match[1], size, ext: match[3].toLowerCase() };
+  const size = match[1] as "original" | "sm" | "lg" | "x640";
+  return { size, ext: match[2].toLowerCase() };
 }
 
 function publicCacheHeaders(ext: string): Headers {
@@ -64,16 +61,17 @@ export async function GET(
       return unavailableImageResponse(parsed.ext);
     }
 
-    if (parsed.baseName !== image.baseName || parsed.ext !== image.ext) {
+    if (parsed.ext !== image.ext) {
       return unavailableImageResponse(parsed.ext);
     }
 
-    const data = await getImageBuffer(
-      image.baseName,
-      image.ext,
-      parsed.size,
-      new Date(image.uploadedAt),
-    );
+    const data = await getMediaBuffer({
+      kind: "image",
+      baseName: image.baseName,
+      ext: image.ext,
+      size: parsed.size === "x640" ? "lg" : parsed.size,
+      uploadedAt: new Date(image.uploadedAt),
+    });
     return new Response(new Uint8Array(data), {
       headers: publicCacheHeaders(image.ext),
     });
