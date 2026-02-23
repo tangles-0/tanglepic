@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
+import {
+  DEFAULT_RESUMABLE_THRESHOLD,
+  KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY,
+  uploadSingleMedia,
+} from "@/lib/upload-client";
 import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
 import { getFileIconForExtension } from "@/lib/FileIconHelper";
 
@@ -11,6 +15,7 @@ type UploadedImage = {
   id: string;
   kind: "image" | "video" | "document" | "other";
   baseName: string;
+  originalFileName?: string;
   ext: string;
   mimeType?: string;
   previewStatus?: "pending" | "ready" | "failed";
@@ -65,7 +70,10 @@ export default function UploadDropzone({
     }>
   >([]);
   const [isClearingFailed, setIsClearingFailed] = useState(false);
+  const [keepOriginalFileName, setKeepOriginalFileName] = useState(false);
+  const [hasLoadedKeepOriginalFileName, setHasLoadedKeepOriginalFileName] = useState(false);
   const dragCounter = useRef(0);
+  const uploadFilesRef = useRef<(files: FileList | File[]) => Promise<void>>(async () => {});
   const inputId = useId();
 
   const statusText = useMemo(() => {
@@ -157,6 +165,28 @@ export default function UploadDropzone({
   }
 
   useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY);
+      setKeepOriginalFileName(stored === "1");
+    } catch {
+      // ignore storage errors
+    } finally {
+      setHasLoadedKeepOriginalFileName(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedKeepOriginalFileName) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY, keepOriginalFileName ? "1" : "0");
+    } catch {
+      // ignore storage errors
+    }
+  }, [hasLoadedKeepOriginalFileName, keepOriginalFileName]);
+
+  useEffect(() => {
     let isMounted = true;
     async function loadAlbumsAndSessions() {
       const [albumsResponse, sessionsResponse] = await Promise.all([
@@ -223,7 +253,7 @@ export default function UploadDropzone({
       setGlobalDragging(false);
       const files = event.dataTransfer?.files;
       if (files && files.length > 0) {
-        void uploadFiles(files);
+        void uploadFilesRef.current(files);
       }
     }
 
@@ -346,6 +376,7 @@ export default function UploadDropzone({
         resumableThresholdBytes,
         resumeFromSessionId: selectedResumeCandidate?.id,
         checksum,
+        keepOriginalFileName,
         onProgress: (uploaded, total) => {
           setUploadProgress((current) => ({
             ...current,
@@ -382,6 +413,8 @@ export default function UploadDropzone({
             id: image.id,
             kind: image.kind,
             baseName: image.baseName,
+            originalFileName:
+              image.originalFileName ?? (keepOriginalFileName ? file.name : undefined),
             ext: image.ext,
             mimeType: image.mimeType,
             previewStatus: image.previewStatus,
@@ -402,6 +435,10 @@ export default function UploadDropzone({
     setMessage(null);
     await loadIncompleteSessions();
   }
+
+  useEffect(() => {
+    uploadFilesRef.current = uploadFiles;
+  });
 
   async function handleCreateAlbum() {
     const name = newAlbumName.trim();
@@ -537,6 +574,14 @@ export default function UploadDropzone({
           </option>
         ))}
       </select>
+      <label className="flex items-center gap-2 text-xs text-neutral-600">
+        <input
+          type="checkbox"
+          checked={keepOriginalFileName}
+          onChange={(event) => setKeepOriginalFileName(event.target.checked)}
+        />
+        keep original file name
+      </label>
 
       <div
         role="button"
@@ -640,7 +685,7 @@ export default function UploadDropzone({
                         className="h-8 w-8 rounded object-cover"
                       />
                     )}
-                    <span className="max-w-[160px] truncate">{image.baseName}</span>
+                    <span className="max-w-[160px] truncate">{image.originalFileName || image.baseName}</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <button

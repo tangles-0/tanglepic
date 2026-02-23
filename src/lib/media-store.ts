@@ -20,6 +20,7 @@ export type MediaEntry = {
   id: string;
   kind: MediaKind;
   baseName: string;
+  originalFileName?: string;
   ext: string;
   mimeType: string;
   albumId?: string;
@@ -45,6 +46,7 @@ function mapImageRow(row: typeof images.$inferSelect): MediaEntry {
     id: row.id,
     kind: "image",
     baseName: row.baseName,
+    originalFileName: row.originalFileName ?? undefined,
     ext: row.ext,
     mimeType: `image/${row.ext === "jpg" ? "jpeg" : row.ext}`,
     albumId: row.albumId ?? undefined,
@@ -65,6 +67,7 @@ function mapVideoRow(row: typeof videos.$inferSelect): MediaEntry {
     id: row.id,
     kind: "video",
     baseName: row.baseName,
+    originalFileName: row.originalFileName ?? undefined,
     ext: row.ext,
     mimeType: row.mimeType,
     albumId: row.albumId ?? undefined,
@@ -87,6 +90,7 @@ function mapDocumentRow(row: typeof documents.$inferSelect): MediaEntry {
     id: row.id,
     kind: "document",
     baseName: row.baseName,
+    originalFileName: row.originalFileName ?? undefined,
     ext: row.ext,
     mimeType: row.mimeType,
     albumId: row.albumId ?? undefined,
@@ -107,6 +111,7 @@ function mapFileRow(row: typeof files.$inferSelect): MediaEntry {
     id: row.id,
     kind: "other",
     baseName: row.baseName,
+    originalFileName: row.originalFileName ?? undefined,
     ext: row.ext,
     mimeType: row.mimeType,
     albumId: row.albumId ?? undefined,
@@ -155,6 +160,7 @@ export async function addMediaForUser(input: {
   userId: string;
   kind: MediaKind;
   baseName: string;
+  originalFileName?: string;
   ext: string;
   mimeType: string;
   albumId?: string;
@@ -206,6 +212,7 @@ export async function addMediaForUser(input: {
       albumCaption: input.albumCaption ?? null,
       albumOrder,
       baseName: input.baseName,
+      originalFileName: input.originalFileName ?? null,
       ext: input.ext,
       width: input.width ?? 0,
       height: input.height ?? 0,
@@ -218,6 +225,7 @@ export async function addMediaForUser(input: {
       id,
       kind: "image",
       baseName: input.baseName,
+      originalFileName: input.originalFileName,
       ext: input.ext,
       mimeType: input.mimeType,
       albumId: input.albumId,
@@ -241,6 +249,7 @@ export async function addMediaForUser(input: {
       albumCaption: input.albumCaption ?? null,
       albumOrder,
       baseName: input.baseName,
+      originalFileName: input.originalFileName ?? null,
       ext: input.ext,
       mimeType: input.mimeType,
       durationSeconds: input.durationSeconds ?? null,
@@ -261,6 +270,7 @@ export async function addMediaForUser(input: {
       albumCaption: input.albumCaption ?? null,
       albumOrder,
       baseName: input.baseName,
+      originalFileName: input.originalFileName ?? null,
       ext: input.ext,
       mimeType: input.mimeType,
       pageCount: input.pageCount ?? null,
@@ -279,6 +289,7 @@ export async function addMediaForUser(input: {
       albumCaption: input.albumCaption ?? null,
       albumOrder,
       baseName: input.baseName,
+      originalFileName: input.originalFileName ?? null,
       ext: input.ext,
       mimeType: input.mimeType,
       sizeOriginal: input.sizeOriginal,
@@ -294,6 +305,7 @@ export async function addMediaForUser(input: {
     id,
     kind: input.kind,
     baseName: input.baseName,
+    originalFileName: input.originalFileName,
     ext: input.ext,
     mimeType: input.mimeType,
     albumId: input.albumId,
@@ -310,6 +322,44 @@ export async function addMediaForUser(input: {
     previewStatus: input.previewStatus,
     previewError: input.previewError,
   };
+}
+
+export async function updateOriginalFileNameForUser(input: {
+  userId: string;
+  kind: MediaKind;
+  mediaId: string;
+  originalFileName: string | null;
+}): Promise<MediaEntry | undefined> {
+  if (input.kind === "image") {
+    const [row] = await db
+      .update(images)
+      .set({ originalFileName: input.originalFileName })
+      .where(and(eq(images.userId, input.userId), eq(images.id, input.mediaId)))
+      .returning();
+    return row ? mapImageRow(row) : undefined;
+  }
+  if (input.kind === "video") {
+    const [row] = await db
+      .update(videos)
+      .set({ originalFileName: input.originalFileName })
+      .where(and(eq(videos.userId, input.userId), eq(videos.id, input.mediaId)))
+      .returning();
+    return row ? mapVideoRow(row) : undefined;
+  }
+  if (input.kind === "document") {
+    const [row] = await db
+      .update(documents)
+      .set({ originalFileName: input.originalFileName })
+      .where(and(eq(documents.userId, input.userId), eq(documents.id, input.mediaId)))
+      .returning();
+    return row ? mapDocumentRow(row) : undefined;
+  }
+  const [row] = await db
+    .update(files)
+    .set({ originalFileName: input.originalFileName })
+    .where(and(eq(files.userId, input.userId), eq(files.id, input.mediaId)))
+    .returning();
+  return row ? mapFileRow(row) : undefined;
 }
 
 export async function listMediaForUser(userId: string): Promise<MediaEntry[]> {

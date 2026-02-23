@@ -71,6 +71,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   const formData = await request.formData();
   const file = formData.get("file");
   const albumId = formData.get("albumId")?.toString().trim() || undefined;
+  const keepOriginalFileName = formData.get("keepOriginalFileName")?.toString() === "1";
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "File is required." }, { status: 400 });
   }
@@ -133,6 +134,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     kind,
     albumId,
     baseName: stored.baseName,
+    originalFileName: keepOriginalFileName ? file.name : undefined,
     ext: stored.ext,
     mimeType: stored.mimeType,
     width: stored.width,

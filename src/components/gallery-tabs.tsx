@@ -18,6 +18,7 @@ type GalleryImage = {
   id: string;
   kind: "image" | "video" | "document" | "other";
   baseName: string;
+  originalFileName?: string;
   ext: string;
   mimeType?: string;
   albumId?: string;

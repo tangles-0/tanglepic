@@ -5,6 +5,7 @@ export type UploadResult = {
     id: string;
     kind: "image" | "video" | "document" | "other";
     baseName: string;
+    originalFileName?: string;
     ext: string;
     mimeType?: string;
     albumId?: string;
@@ -18,6 +19,7 @@ export type UploadResult = {
 
 const DEFAULT_CHUNK_SIZE = 8 * 1024 * 1024;
 export const DEFAULT_RESUMABLE_THRESHOLD = 64 * 1024 * 1024;
+export const KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY = "tanglepic-keep-original-file-name";
 const PART_RETRY_LIMIT = 4;
 
 export type UploadOptions = {
@@ -25,6 +27,7 @@ export type UploadOptions = {
   onProgress?: (uploadedBytes: number, totalBytes: number) => void;
   resumeFromSessionId?: string;
   checksum?: string;
+  keepOriginalFileName?: boolean;
 };
 
 type InitUploadResponse = {
@@ -184,6 +187,7 @@ export async function uploadSingleMedia(
       body: JSON.stringify({
         sessionId: resumable.sessionId,
         albumId,
+        keepOriginalFileName: options?.keepOriginalFileName === true,
       }),
     });
     if (!finalizeResponse.ok) {
@@ -211,6 +215,7 @@ export async function uploadSingleMedia(
   if (albumId) {
     formData.append("albumId", albumId);
   }
+  formData.append("keepOriginalFileName", options?.keepOriginalFileName === true ? "1" : "0");
 
   const response = await fetch("/api/media", {
     method: "POST",

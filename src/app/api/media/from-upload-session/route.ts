@@ -17,7 +17,11 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
-  const payload = (await request.json()) as { sessionId?: string; albumId?: string };
+  const payload = (await request.json()) as {
+    sessionId?: string;
+    albumId?: string;
+    keepOriginalFileName?: boolean;
+  };
   const sessionId = payload.sessionId?.trim() ?? "";
   const albumId = payload.albumId?.trim() || undefined;
   if (!sessionId) {
@@ -65,6 +69,7 @@ export async function POST(request: Request): Promise<NextResponse> {
     kind,
     albumId,
     baseName: stored.baseName,
+    originalFileName: payload.keepOriginalFileName ? session.fileName : undefined,
     ext: stored.ext,
     mimeType: stored.mimeType,
     width: stored.width,

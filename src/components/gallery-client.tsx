@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
+import {
+  DEFAULT_RESUMABLE_THRESHOLD,
+  KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY,
+  uploadSingleMedia,
+} from "@/lib/upload-client";
 import FancyCheckbox from "@/components/ui/fancy-checkbox";
 
 import { LightCaretRight } from '@energiz3r/icon-library/Icons/Light/LightCaretRight';
@@ -15,6 +19,7 @@ import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArro
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 import { LightClock } from '@energiz3r/icon-library/Icons/Light/LightClock';
 import { LightPlayCircle } from '@energiz3r/icon-library/Icons/Light/LightPlayCircle';
+import { LightEdit } from '@energiz3r/icon-library/Icons/Light/LightEdit';
 
 import { SharePill } from "./share-pill";
 import { DitherIcon } from "./icons/dither";
@@ -30,6 +35,7 @@ type GalleryImage = {
   id: string;
   kind: "image" | "video" | "document" | "other";
   baseName: string;
+  originalFileName?: string;
   ext: string;
   mimeType?: string;
   albumId?: string;
@@ -108,6 +114,9 @@ export default function GalleryClient({
   const [isSavingCaption, setIsSavingCaption] = useState(false);
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [captionDraft, setCaptionDraft] = useState("");
+  const [isEditingOriginalFileName, setIsEditingOriginalFileName] = useState(false);
+  const [isSavingOriginalFileName, setIsSavingOriginalFileName] = useState(false);
+  const [originalFileNameDraft, setOriginalFileNameDraft] = useState("");
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [dragOverImageId, setDragOverImageId] = useState<string | null>(null);
   const [imageVersionBumps, setImageVersionBumps] = useState<Record<string, number>>({});
@@ -286,6 +295,11 @@ export default function GalleryClient({
   const supports640Variant = isImageActive && active?.ext.toLowerCase() !== "svg";
   const canRotateActive =
     active && isImageActive ? ROTATABLE_EXTENSIONS.has(active.ext.toLowerCase()) : false;
+  const activeDisplayName = active?.originalFileName || active?.baseName || "";
+
+  function displayNameForMedia(image: GalleryImage): string {
+    return image.originalFileName || image.baseName;
+  }
 
   function pushMessage(text: string, tone: UploadMessage["tone"]) {
     const entry: UploadMessage = {
@@ -306,6 +320,13 @@ export default function GalleryClient({
       return;
     }
 
+    let keepOriginalFileName = false;
+    try {
+      keepOriginalFileName = window.localStorage.getItem(KEEP_ORIGINAL_FILE_NAME_STORAGE_KEY) === "1";
+    } catch {
+      keepOriginalFileName = false;
+    }
+
     for (const file of itemsToUpload) {
       if (file.size >= resumableThresholdBytes) {
         window.alert(
@@ -314,7 +335,9 @@ export default function GalleryClient({
         pushMessage(`${file.name}: use Upload page for large files.`, "error");
         continue;
       }
-      const result = await uploadSingleMedia(file, uploadAlbumId);
+      const result = await uploadSingleMedia(file, uploadAlbumId, {
+        keepOriginalFileName,
+      });
       pushMessage(result.message, result.ok ? "success" : "error");
 
       if (result.ok && result.media) {
@@ -333,6 +356,9 @@ export default function GalleryClient({
     setRotateError(null);
     setAlbumEditError(null);
     setPreviewActionError(null);
+    setIsEditingOriginalFileName(false);
+    setIsSavingOriginalFileName(false);
+    setOriginalFileNameDraft(image.originalFileName ?? "");
     setHas640Variant(null);
     setIsChecking640(false);
 
@@ -376,6 +402,9 @@ export default function GalleryClient({
     setRotateError(null);
     setAlbumEditError(null);
     setPreviewActionError(null);
+    setIsEditingOriginalFileName(false);
+    setIsSavingOriginalFileName(false);
+    setOriginalFileNameDraft("");
     setHas640Variant(null);
     setIsChecking640(false);
   }
@@ -835,6 +864,44 @@ export default function GalleryClient({
     }
   }
 
+  async function saveOriginalFileName() {
+    if (!active || isSavingOriginalFileName) {
+      return;
+    }
+    setAlbumEditError(null);
+    setIsSavingOriginalFileName(true);
+    try {
+      const response = await fetch("/api/media/file-name", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: active.kind,
+          mediaId: active.id,
+          originalFileName: originalFileNameDraft.trim() || null,
+        }),
+      });
+      const payload = (await response.json()) as { error?: string; media?: { originalFileName?: string } };
+      if (!response.ok || !payload.media) {
+        throw new Error(payload.error ?? "Unable to update file name.");
+      }
+      const nextOriginalFileName = payload.media.originalFileName ?? undefined;
+      setItems((current) =>
+        current.map((item) =>
+          item.id === active.id ? { ...item, originalFileName: nextOriginalFileName } : item,
+        ),
+      );
+      setActive((current) =>
+        current?.id === active.id ? { ...current, originalFileName: nextOriginalFileName } : current,
+      );
+      setOriginalFileNameDraft(nextOriginalFileName ?? "");
+      setIsEditingOriginalFileName(false);
+    } catch (error) {
+      setAlbumEditError(error instanceof Error ? error.message : "Unable to update file name.");
+    } finally {
+      setIsSavingOriginalFileName(false);
+    }
+  }
+
   async function fetchAlbums() {
     const response = await fetch("/api/albums");
     if (!response.ok) {
@@ -1215,7 +1282,7 @@ export default function GalleryClient({
                 )}
               </button>
               <div className="flex items-center justify-between px-3 py-2 text-xs text-neutral-500">
-                <span className="truncate">{image.baseName}</span>
+                <span className="truncate">{displayNameForMedia(image)}</span>
                 <span>
                   {image.width && image.height ? `${image.width}×${image.height}` : image.kind}
                 </span>
@@ -1255,7 +1322,50 @@ export default function GalleryClient({
             <div className="flex sm:flex-row flex-col items-start justify-between gap-4">
               <div>
                 <h2 className="text-lg font-semibold">file details</h2>
-                <p className="text-xs text-neutral-500">{active.baseName}</p>
+                <div className="mt-1 flex items-center gap-2">
+                  {isEditingOriginalFileName ? (
+                    <>
+                      <input
+                        value={originalFileNameDraft}
+                        onChange={(event) => setOriginalFileNameDraft(event.target.value)}
+                        className="w-full rounded border border-neutral-200 px-2 py-1 text-xs"
+                        placeholder={active.baseName}
+                        maxLength={255}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => void saveOriginalFileName()}
+                        disabled={isSavingOriginalFileName}
+                        className="rounded border border-neutral-200 px-2 py-1 text-xs disabled:opacity-50"
+                      >
+                        {isSavingOriginalFileName ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsEditingOriginalFileName(false);
+                          setOriginalFileNameDraft(active.originalFileName ?? "");
+                        }}
+                        className="rounded border border-neutral-200 px-2 py-1 text-xs"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-neutral-500">{activeDisplayName}</p>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingOriginalFileName(true)}
+                        className="rounded border border-neutral-200 p-1 text-neutral-500"
+                        aria-label="Edit file name"
+                        title="Edit file name"
+                      >
+                        <LightEdit className="h-4 w-4" fill="currentColor" />
+                      </button>
+                    </>
+                  )}
+                </div>
                 {activeIndex >= 0 ? (
                   <p className="text-xs text-neutral-500">
                     {activeIndex + 1} / {displayItems.length}
