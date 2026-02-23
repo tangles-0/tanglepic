@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { uploadSingleImage } from "@/lib/upload-client";
+import { uploadSingleMedia } from "@/lib/upload-client";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
 type UploadedImage = {
   id: string;
+  kind: "image" | "video" | "document" | "other";
   baseName: string;
   ext: string;
 };
@@ -45,7 +46,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     if (status === "uploading") return "uploading...";
     if (status === "success") return "upload complete.";
     if (status === "error") return message ?? "oh shi-";
-    return "drag N drop imgs here, or click 2 browse";
+    return "drag N drop files here, or click 2 browse";
   }, [message, status]);
 
   function pushMessage(text: string, tone: UploadMessage["tone"]) {
@@ -130,10 +131,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
       setMessage("Uploads are currently disabled.");
       return;
     }
-    const items = Array.from(files).filter((file) => file.type.startsWith("image/"));
+    const items = Array.from(files);
     if (items.length === 0) {
       setStatus("error");
-      setMessage("Please drop image files.");
+      setMessage("Please drop files.");
       return;
     }
 
@@ -141,7 +142,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
     setMessage(null);
 
     for (const file of items) {
-      const result = await uploadSingleImage(file, albumId.trim() || undefined);
+      const result = await uploadSingleMedia(file, albumId.trim() || undefined);
       pushMessage(result.message, result.ok ? "success" : "error");
 
       if (!result.ok) {
@@ -150,7 +151,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
         continue;
       }
 
-      const image = result.image;
+      const image = result.media;
       if (!image) {
         continue;
       }
@@ -158,6 +159,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
         const next = [
           {
             id: image.id,
+            kind: image.kind,
             baseName: image.baseName,
             ext: image.ext,
           },
@@ -199,10 +201,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
   }
 
   async function enableSharing(image: UploadedImage): Promise<ShareInfo | null> {
-    const response = await fetch("/api/shares", {
+    const response = await fetch("/api/media-shares", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ imageId: image.id }),
+      body: JSON.stringify({ kind: image.kind, mediaId: image.id }),
     });
 
     if (!response.ok) {
@@ -235,10 +237,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
   }
 
   async function deleteRecentUpload(image: UploadedImage) {
-    const response = await fetch("/api/images/bulk", {
+    const response = await fetch("/api/media/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "delete", imageIds: [image.id] }),
+      body: JSON.stringify({ action: "delete", mediaItems: [{ id: image.id, kind: image.kind }] }),
     });
 
     if (!response.ok) {
@@ -275,7 +277,7 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
 
   return (
     <section className="space-y-3 rounded-md border border-neutral-200 p-4">
-      <h2 className="text-lg font-medium">upload imgs</h2>
+      <h2 className="text-lg font-medium">upload files</h2>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="block text-xs text-neutral-500" htmlFor={inputId}>
           album (optional)
@@ -329,14 +331,14 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
       >
         <p className="font-medium">{statusText}</p>
         <p className="mt-2 text-xs text-neutral-500">
-          imgs are stored by upload time with metadata removed.
+          files are stored by upload time with metadata removed.
         </p>
       </div>
 
       <input
         id={`${inputId}-file`}
         type="file"
-        accept="image/*"
+        accept="*/*"
         multiple
         className="hidden"
         disabled={!uploadsEnabled}
@@ -373,7 +375,10 @@ export default function UploadDropzone({ uploadsEnabled = true }: { uploadsEnabl
           <h3 className="text-xs font-medium text-neutral-600">ur recent uploads</h3>
           <div className="space-y-2">
             {recentUploads.map((image) => {
-              const thumbUrl = `/image/${image.id}/${image.baseName}-sm.${image.ext}`;
+              const thumbUrl =
+                image.kind === "image"
+                  ? `/media/${image.kind}/${image.id}/${image.baseName}-sm.${image.ext}`
+                  : `/media/${image.kind}/${image.id}/${image.baseName}-sm.png`;
               return (
                 <div
                   key={image.id}

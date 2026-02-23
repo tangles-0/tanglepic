@@ -7,12 +7,15 @@ import {
   albumShares,
   albums,
   appSettings,
+  documents,
+  files,
   groupLimits,
   groups,
   images,
   patchNotes,
   shares,
   users,
+  videos,
 } from "@/db/schema";
 
 export type Album = {
@@ -325,17 +328,49 @@ export async function getUserUploadStats(userId: string): Promise<{
   imageCount: number;
   totalBytes: number;
 }> {
-  const [row] = await db
+  const [imageRow] = await db
     .select({
       totalBytes: sql<number>`coalesce(sum(${images.sizeOriginal} + ${images.sizeSm} + ${images.sizeLg}), 0)`,
       imageCount: sql<number>`count(${images.id})`,
     })
     .from(images)
     .where(eq(images.userId, userId));
+  const [videoRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${videos.sizeOriginal} + ${videos.sizeSm} + ${videos.sizeLg}), 0)`,
+      count: sql<number>`count(${videos.id})`,
+    })
+    .from(videos)
+    .where(eq(videos.userId, userId));
+  const [documentRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${documents.sizeOriginal} + ${documents.sizeSm} + ${documents.sizeLg}), 0)`,
+      count: sql<number>`count(${documents.id})`,
+    })
+    .from(documents)
+    .where(eq(documents.userId, userId));
+  const [fileRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${files.sizeOriginal} + ${files.sizeSm} + ${files.sizeLg}), 0)`,
+      count: sql<number>`count(${files.id})`,
+    })
+    .from(files)
+    .where(eq(files.userId, userId));
+
+  const totalCount =
+    Number(imageRow?.imageCount ?? 0) +
+    Number(videoRow?.count ?? 0) +
+    Number(documentRow?.count ?? 0) +
+    Number(fileRow?.count ?? 0);
+  const totalBytes =
+    Number(imageRow?.totalBytes ?? 0) +
+    Number(videoRow?.totalBytes ?? 0) +
+    Number(documentRow?.totalBytes ?? 0) +
+    Number(fileRow?.totalBytes ?? 0);
 
   return {
-    imageCount: Number(row?.imageCount ?? 0),
-    totalBytes: Number(row?.totalBytes ?? 0),
+    imageCount: totalCount,
+    totalBytes,
   };
 }
 
@@ -1121,8 +1156,22 @@ export type GroupLimits = {
 };
 
 const DEFAULT_LIMITS: Omit<GroupLimits, "id" | "groupId" | "createdAt" | "updatedAt"> = {
-  maxFileSize: 10 * 1024 * 1024,
-  allowedTypes: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  maxFileSize: 512 * 1024 * 1024,
+  allowedTypes: [
+    "image/*",
+    "video/*",
+    "audio/*",
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.ms-excel",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/plain",
+    "text/csv",
+    "application/zip",
+    "application/x-7z-compressed",
+    "application/gzip",
+  ],
   rateLimitPerMinute: 30,
 };
 
@@ -1233,12 +1282,30 @@ export async function getAdminStats(): Promise<{
   albumCount: number;
   filetypeBreakdown: { ext: string; count: number }[];
 }> {
-  const [row] = await db
+  const [imageRow] = await db
     .select({
       totalBytes: sql<number>`coalesce(sum(${images.sizeOriginal} + ${images.sizeSm} + ${images.sizeLg}), 0)`,
       imageCount: sql<number>`count(${images.id})`,
     })
     .from(images);
+  const [videoRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${videos.sizeOriginal} + ${videos.sizeSm} + ${videos.sizeLg}), 0)`,
+      count: sql<number>`count(${videos.id})`,
+    })
+    .from(videos);
+  const [documentRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${documents.sizeOriginal} + ${documents.sizeSm} + ${documents.sizeLg}), 0)`,
+      count: sql<number>`count(${documents.id})`,
+    })
+    .from(documents);
+  const [fileRow] = await db
+    .select({
+      totalBytes: sql<number>`coalesce(sum(${files.sizeOriginal} + ${files.sizeSm} + ${files.sizeLg}), 0)`,
+      count: sql<number>`count(${files.id})`,
+    })
+    .from(files);
 
   const [userRow] = await db
     .select({ userCount: sql<number>`count(${users.id})` })
@@ -1275,8 +1342,16 @@ export async function getAdminStats(): Promise<{
     .groupBy(images.ext)
     .orderBy(sql`count(${images.id}) desc`);
 
-  const imageCount = Number(row?.imageCount ?? 0);
-  const totalBytes = Number(row?.totalBytes ?? 0);
+  const imageCount =
+    Number(imageRow?.imageCount ?? 0) +
+    Number(videoRow?.count ?? 0) +
+    Number(documentRow?.count ?? 0) +
+    Number(fileRow?.count ?? 0);
+  const totalBytes =
+    Number(imageRow?.totalBytes ?? 0) +
+    Number(videoRow?.totalBytes ?? 0) +
+    Number(documentRow?.totalBytes ?? 0) +
+    Number(fileRow?.totalBytes ?? 0);
   const sharedCount = Number(sharedRow?.sharedCount ?? 0);
 
   return {

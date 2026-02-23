@@ -67,7 +67,7 @@ export default async function AdminHomePage() {
         <StatCard label="Signups last 24h" value={stats.signupsLast24h} />
         <StatCard label="Signups last 30d" value={stats.signupsLast30d} />
         <StatCard label="Albums" value={stats.albumCount} />
-        <StatCard label="Shared images" value={`${stats.sharedPercent}%`} />
+        <StatCard label="Shared files" value={`${stats.sharedPercent}%`} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">

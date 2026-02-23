@@ -16,29 +16,33 @@ type AlbumInfo = {
 
 type GalleryImage = {
   id: string;
+  kind: "image" | "video" | "document" | "other";
   baseName: string;
   ext: string;
+  mimeType?: string;
   albumId?: string;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
   uploadedAt: string;
   shared?: boolean;
+  previewStatus?: "pending" | "ready" | "failed";
 };
 
 export default function GalleryTabs({
   albums,
-  images,
-  initialTab = "images",
+  media,
+  initialTab = "files",
 }: {
   albums: AlbumInfo[];
-  images: GalleryImage[];
-  initialTab?: "albums" | "images";
+  media: GalleryImage[];
+  initialTab?: "albums" | "files";
 }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [imageItems, setImageItems] = useState<GalleryImage[]>(images);
-  const [activeTab, setActiveTab] = useState<"albums" | "images">(initialTab);
+  const [imageItems, setImageItems] = useState<GalleryImage[]>(media);
+  const [activeTab, setActiveTab] = useState<"albums" | "files">(initialTab);
+  const [fileTypeFilter, setFileTypeFilter] = useState<"all" | "image" | "video" | "document" | "other">("all");
   const [albumItems, setAlbumItems] = useState(albums);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [newAlbumName, setNewAlbumName] = useState("");
@@ -75,18 +79,18 @@ export default function GalleryTabs({
 
   const albumPreviews = albumItems.map((album) => {
     const previews = imageItems
-      .filter((image) => image.albumId === album.id)
+      .filter((image) => image.albumId === album.id && image.kind === "image")
       .slice(0, 3)
-      .map((image) => ({ id: image.id, baseName: image.baseName, ext: image.ext }));
+      .map((image) => ({ id: image.id, kind: image.kind, baseName: image.baseName, ext: image.ext }));
     return { ...album, previews };
   });
 
-  function setTab(next: "albums" | "images") {
+  function setTab(next: "albums" | "files") {
     setActiveTab(next);
     const params = new URLSearchParams(searchParams.toString());
     if (next === "albums") {
       params.set("tab", "albums");
-    } else {
+    } else if (next === "files") {
       params.delete("tab");
     }
     const query = params.toString();
@@ -180,20 +184,20 @@ export default function GalleryTabs({
         </button>
         <button
           type="button"
-          onClick={() => setTab("images")}
+          onClick={() => setTab("files")}
           className={`rounded px-3 py-1 ${
-            activeTab === "images" ? "bg-black text-white" : "border border-neutral-200"
+            activeTab === "files" ? "bg-black text-white" : "border border-neutral-200"
           }`}
         >
-          imgs
+          files
         </button>
-        {activeTab === "images" ? (
+        {activeTab === "files" ? (
           <button
             type="button"
             onClick={() => setHideAlbumImages((current) => !current)}
             className="rounded border border-neutral-200 px-3 py-1"
           >
-            {hideAlbumImages ? "show album imgs" : "hide album imgs"}
+            {hideAlbumImages ? "show album files" : "hide album files"}
           </button>
         ) : null}
         {activeTab === "albums" ? (
@@ -209,6 +213,22 @@ export default function GalleryTabs({
           </button>
         ) : null}
       </div>
+      {activeTab === "files" ? (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {(["all", "image", "video", "document", "other"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setFileTypeFilter(item)}
+              className={`rounded px-3 py-1 ${
+                fileTypeFilter === item ? "bg-black text-white" : "border border-neutral-200"
+              }`}
+            >
+              {item === "image" ? "images" : item === "document" ? "documents" : item}
+            </button>
+          ))}
+        </div>
+      ) : null}
 
       {activeTab === "albums" ? (
         <div className="space-y-4">
@@ -229,7 +249,7 @@ export default function GalleryTabs({
                         album.previews.map((image) => (
                           <img
                             key={image.id}
-                            src={`/image/${image.id}/${image.baseName}-sm.${image.ext}`}
+                            src={`/media/${image.kind}/${image.id}/${image.baseName}-sm.${image.ext}`}
                             alt="album preview"
                             className="h-20 w-full rounded object-cover"
                           />
@@ -384,10 +404,11 @@ export default function GalleryTabs({
         </div>
       ) : (
         <GalleryClient
-          images={imageItems}
+          media={imageItems}
           onImagesChange={setImageItems}
           showAlbumImageToggle={false}
           hideImagesInAlbums={hideAlbumImages}
+          kindFilter={fileTypeFilter}
         />
       )}
     </div>

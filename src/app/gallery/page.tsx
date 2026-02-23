@@ -6,8 +6,8 @@ import {
   getUserLastPatchNoteDismissed,
   isAdminUser,
   listAlbums,
-  listImagesForUser,
 } from "@/lib/metadata-store";
+import { listMediaForUser } from "@/lib/media-store";
 import GalleryTabs from "@/components/gallery-tabs";
 import PatchNoteBanner from "@/components/patch-note-banner";
 import PageHeader from "@/components/ui/page-header";
@@ -24,15 +24,15 @@ export default async function GalleryPage({
     redirect("/");
   }
 
-  const [albums, images, isAdmin, latestPatchNote, dismissedAt] = await Promise.all([
+  const [albums, media, isAdmin, latestPatchNote, dismissedAt] = await Promise.all([
     listAlbums(userId),
-    listImagesForUser(userId),
+    listMediaForUser(userId),
     isAdminUser(userId),
     getLatestPatchNote(),
     getUserLastPatchNoteDismissed(userId),
   ]);
   const resolvedSearchParams = searchParams ? await searchParams : undefined;
-  const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "images";
+  const initialTab = resolvedSearchParams?.tab === "albums" ? "albums" : "files";
   const pageTitle = initialTab === "albums" ? "ur albums" : "ur gallery";
   const shouldShowPatchBanner =
     latestPatchNote &&
@@ -42,7 +42,7 @@ export default async function GalleryPage({
     <main className="flex min-h-screen w-full flex-col gap-6 px-2 sm:px-6 py-2 sm:py-10 text-sm">
       <PageHeader
         title={pageTitle}
-        subtitle={`${images.length} image${images.length === 1 ? "" : "s"} uploaded.`}
+        subtitle={`${media.length} file${media.length === 1 ? "" : "s"} uploaded.`}
         backLink={{ href: "/", label: "cd .. (home)" }}
         actions={
           <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
@@ -71,7 +71,7 @@ export default async function GalleryPage({
       <GalleryTabs
         initialTab={initialTab}
         albums={albums.map((album) => ({ id: album.id, name: album.name }))}
-        images={images}
+        media={media}
       />
     </main>
   );

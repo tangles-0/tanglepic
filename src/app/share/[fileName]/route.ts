@@ -1,6 +1,8 @@
 import type { NextRequest } from "next/server";
-import { getImageBuffer } from "@/lib/storage";
 import { getAlbumShareByCode, getImage, getShareByCode } from "@/lib/metadata-store";
+import { getMediaBuffer } from "@/lib/media-storage";
+import { getSharedMediaByCode, getSharedMediaByCodeAndExt } from "@/lib/media-store";
+import { contentTypeForExt } from "@/lib/media-types";
 import { unavailableImageResponse } from "@/lib/unavailable-image";
 
 export const runtime = "nodejs";
@@ -31,19 +33,6 @@ function parseFileName(fileName: string): {
   const size =
     suffix === "-sm" ? "sm" : suffix === "-lg" ? "lg" : suffix === "-640" ? "x640" : "original";
   return { code: match[1], size, ext: match[3].toLowerCase() };
-}
-
-function contentTypeForExt(ext: string): string {
-  switch (ext) {
-    case "png":
-      return "image/png";
-    case "webp":
-      return "image/webp";
-    case "gif":
-      return "image/gif";
-    default:
-      return "image/jpeg";
-  }
 }
 
 function getInternalAppOrigin(): string {
@@ -95,23 +84,41 @@ export async function GET(
       return withPublicImageCors(await unavailableImageResponse("png"));
     }
 
-    const share = await getShareByCode(parsed.code);
-    if (!share) {
-      return withPublicImageCors(await unavailableImageResponse(parsed.ext));
+    const imageShare = await getShareByCode(parsed.code);
+    if (imageShare) {
+      const image = await getImage(imageShare.imageId);
+      if (image && image.ext === parsed.ext) {
+        const data = await getMediaBuffer({
+          kind: "image",
+          baseName: image.baseName,
+          ext: image.ext,
+          size: parsed.size === "x640" ? "lg" : parsed.size,
+          uploadedAt: new Date(image.uploadedAt),
+        });
+        return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(image.ext) }));
+      }
     }
 
-    const image = await getImage(share.imageId);
-    if (!image || image.ext !== parsed.ext) {
+    let media = await getSharedMediaByCodeAndExt(parsed.code, parsed.ext);
+    if (!media && parsed.size !== "original" && parsed.ext === "png") {
+      media = await getSharedMediaByCode(parsed.code);
+    }
+    if (!media) {
       return withPublicImageCors(await unavailableImageResponse(parsed.ext));
     }
+    if (media.kind === "video" && media.previewStatus !== "ready" && parsed.size !== "original") {
+      return withPublicImageCors(await unavailableImageResponse("png"));
+    }
 
-    const data = await getImageBuffer(
-      image.baseName,
-      image.ext,
-      parsed.size,
-      new Date(image.uploadedAt),
-    );
-    return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(image.ext) }));
+    const data = await getMediaBuffer({
+      kind: media.kind,
+      baseName: media.baseName,
+      ext: media.ext,
+      size: parsed.size === "x640" ? "lg" : parsed.size,
+      uploadedAt: new Date(media.uploadedAt),
+    });
+    const responseExt = parsed.size === "original" ? media.ext : media.kind === "image" ? media.ext : "png";
+    return withPublicImageCors(new Response(new Uint8Array(data), { headers: publicCacheHeaders(responseExt) }));
   } catch {
     if (!parsed) {
       return withPublicImageCors(new Response("Service temporarily unavailable.", { status: 503 }));

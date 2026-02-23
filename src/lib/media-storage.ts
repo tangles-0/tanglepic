@@ -1,0 +1,250 @@
+import path from "path";
+import os from "os";
+import { promises as fs } from "fs";
+import { execFile } from "child_process";
+import { promisify } from "util";
+import sharp from "sharp";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { contentTypeForExt } from "@/lib/media-types";
+
+type StorageBackend = "local" | "s3";
+export type MediaSize = "original" | "sm" | "lg";
+export type StoredMediaResult = {
+  baseName: string;
+  ext: string;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  sizeOriginal: number;
+  sizeSm: number;
+  sizeLg: number;
+  previewStatus: "pending" | "ready" | "failed";
+};
+
+const DATA_DIR = path.join(process.cwd(), "data");
+const STORAGE_BACKEND = (process.env.STORAGE_BACKEND as StorageBackend) || "local";
+const S3_BUCKET = process.env.S3_BUCKET;
+const S3_REGION = process.env.S3_REGION;
+const S3_ENDPOINT = process.env.S3_ENDPOINT;
+const s3Client =
+  STORAGE_BACKEND === "s3" && S3_BUCKET && S3_REGION
+    ? new S3Client({
+        region: S3_REGION,
+        endpoint: S3_ENDPOINT,
+        forcePathStyle: Boolean(S3_ENDPOINT),
+      })
+    : null;
+const execFileAsync = promisify(execFile);
+
+function datePathParts(uploadedAt: Date): { year: string; month: string; day: string } {
+  return {
+    year: String(uploadedAt.getUTCFullYear()),
+    month: String(uploadedAt.getUTCMonth() + 1).padStart(2, "0"),
+    day: String(uploadedAt.getUTCDate()).padStart(2, "0"),
+  };
+}
+
+function buildStorageKey(
+  kind: string,
+  baseName: string,
+  ext: string,
+  size: MediaSize,
+  uploadedAt: Date,
+): string {
+  const { year, month, day } = datePathParts(uploadedAt);
+  return path.posix.join("uploads", year, month, day, kind, size, `${baseName}.${ext}`);
+}
+
+function absolutePathForKey(key: string): string {
+  return path.join(DATA_DIR, key);
+}
+
+export function buildMediaBaseName(uploadedAt: Date): string {
+  const iso = uploadedAt.toISOString().replace(/[:.]/g, "-");
+  const suffix = Math.random().toString(36).slice(2, 8);
+  return `${iso}-${suffix}`;
+}
+
+async function writeKey(key: string, ext: string, data: Buffer): Promise<void> {
+  if (STORAGE_BACKEND === "s3") {
+    if (!s3Client || !S3_BUCKET) {
+      throw new Error("S3 is not configured.");
+    }
+    await s3Client.send(
+      new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+        Body: data,
+        ContentType: contentTypeForExt(ext),
+      }),
+    );
+    return;
+  }
+  const filePath = absolutePathForKey(key);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, data);
+}
+
+async function readKey(key: string): Promise<Buffer> {
+  if (STORAGE_BACKEND === "s3") {
+    if (!s3Client || !S3_BUCKET) {
+      throw new Error("S3 is not configured.");
+    }
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: key,
+      }),
+    );
+    const chunks: Buffer[] = [];
+    const stream = response.Body as AsyncIterable<Uint8Array>;
+    for await (const chunk of stream) {
+      chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+  }
+  return fs.readFile(absolutePathForKey(key));
+}
+
+function asPreviewPng(text: string): Promise<Buffer> {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="768">
+  <rect width="100%" height="100%" fill="#111827"/>
+  <rect x="24" y="24" width="976" height="720" rx="18" fill="#1f2937" stroke="#374151"/>
+  <text x="512" y="360" font-size="72" text-anchor="middle" fill="#9ca3af" font-family="Arial, sans-serif">${text}</text>
+  </svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}
+
+async function tryGeneratePdfPreview(buffer: Buffer): Promise<Buffer | null> {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "tanglepic-pdf-"));
+  const inputPath = path.join(tmpDir, "input.pdf");
+  const outputPrefix = path.join(tmpDir, "preview");
+  const outputPath = `${outputPrefix}.png`;
+  try {
+    await fs.writeFile(inputPath, buffer);
+    await execFileAsync("pdftoppm", ["-f", "1", "-singlefile", "-png", inputPath, outputPrefix], {
+      timeout: 20_000,
+    });
+    return await fs.readFile(outputPath);
+  } catch {
+    return null;
+  } finally {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
+}
+
+export async function storeGenericMediaFromBuffer(input: {
+  kind: "video" | "document" | "other";
+  buffer: Buffer;
+  ext: string;
+  mimeType: string;
+  uploadedAt: Date;
+  deferPreview?: boolean;
+}): Promise<StoredMediaResult> {
+  const baseName = buildMediaBaseName(input.uploadedAt);
+  const originalKey = buildStorageKey(input.kind, baseName, input.ext, "original", input.uploadedAt);
+  await writeKey(originalKey, input.ext, input.buffer);
+  const sizeOriginal = input.buffer.length;
+
+  if (input.kind === "video" && input.deferPreview) {
+    return {
+      baseName,
+      ext: input.ext,
+      mimeType: input.mimeType,
+      sizeOriginal,
+      sizeSm: 0,
+      sizeLg: 0,
+      previewStatus: "pending",
+    };
+  }
+
+  let lgBuffer: Buffer;
+  if (
+    input.kind === "document" &&
+    (input.ext.toLowerCase() === "pdf" || input.mimeType.toLowerCase() === "application/pdf")
+  ) {
+    const pdfPreview = await tryGeneratePdfPreview(input.buffer);
+    if (pdfPreview) {
+      lgBuffer = await sharp(pdfPreview).resize({ width: 1024, withoutEnlargement: true }).png().toBuffer();
+    } else {
+      lgBuffer = await asPreviewPng("Document Preview");
+    }
+  } else {
+    const label = input.kind === "document" ? "Document Preview" : "File Preview";
+    lgBuffer = await asPreviewPng(label);
+  }
+  const smBuffer = await sharp(lgBuffer).resize({ width: 320, withoutEnlargement: true }).png().toBuffer();
+
+  const smKey = buildStorageKey(input.kind, baseName, "png", "sm", input.uploadedAt);
+  const lgKey = buildStorageKey(input.kind, baseName, "png", "lg", input.uploadedAt);
+  await writeKey(smKey, "png", smBuffer);
+  await writeKey(lgKey, "png", lgBuffer);
+
+  return {
+    baseName,
+    ext: input.ext,
+    mimeType: input.mimeType,
+    sizeOriginal,
+    sizeSm: smBuffer.length,
+    sizeLg: lgBuffer.length,
+    previewStatus: "ready",
+  };
+}
+
+export async function storeImageMediaFromBuffer(input: {
+  buffer: Buffer;
+  ext: string;
+  mimeType: string;
+  uploadedAt: Date;
+}): Promise<StoredMediaResult> {
+  const baseName = buildMediaBaseName(input.uploadedAt);
+  const image = sharp(input.buffer).rotate();
+  const metadata = await image.metadata();
+  const ext = input.ext === "jpeg" ? "jpg" : input.ext;
+  const format: keyof sharp.FormatEnum =
+    ext === "jpg" ? "jpeg" : (ext as keyof sharp.FormatEnum);
+  const originalBuffer = await image.clone().toFormat(format).toBuffer();
+  const smBuffer = await image
+    .clone()
+    .resize({ width: 320, withoutEnlargement: true })
+    .toFormat(format)
+    .toBuffer();
+  const lgBuffer = await image
+    .clone()
+    .resize({ width: 1024, withoutEnlargement: true })
+    .toFormat(format)
+    .toBuffer();
+
+  await writeKey(buildStorageKey("image", baseName, ext, "original", input.uploadedAt), ext, originalBuffer);
+  await writeKey(buildStorageKey("image", baseName, ext, "sm", input.uploadedAt), ext, smBuffer);
+  await writeKey(buildStorageKey("image", baseName, ext, "lg", input.uploadedAt), ext, lgBuffer);
+
+  return {
+    baseName,
+    ext,
+    mimeType: input.mimeType,
+    width: metadata.width ?? undefined,
+    height: metadata.height ?? undefined,
+    sizeOriginal: originalBuffer.length,
+    sizeSm: smBuffer.length,
+    sizeLg: lgBuffer.length,
+    previewStatus: "ready",
+  };
+}
+
+export async function getMediaBuffer(input: {
+  kind: "image" | "video" | "document" | "other";
+  baseName: string;
+  ext: string;
+  size: MediaSize;
+  uploadedAt: Date;
+}): Promise<Buffer> {
+  const requestedExt = input.kind === "image" || input.size === "original" ? input.ext : "png";
+  const key = buildStorageKey(input.kind, input.baseName, requestedExt, input.size, input.uploadedAt);
+  return await readKey(key);
+}
+
+export async function readCompletedUploadBuffer(storageKey: string): Promise<Buffer> {
+  return readKey(storageKey);
+}
+
