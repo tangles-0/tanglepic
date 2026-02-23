@@ -45,11 +45,11 @@ export default async function GalleryPage({
       <PageHeader
         title={pageTitle}
         subtitle={`${media.length} file${media.length === 1 ? "" : "s"} uploaded.`}
-        backLink={{ href: "/", label: "cd .. (home)" }}
+        backLink={{ href: "/", label: "cd .. (back 2 home)" }}
         actions={
           <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
             <TextLink href="/upload" className="text-sm">
-              upload imgs
+              upload
             </TextLink>
             {isAdmin ? (
               <TextLink href="/admin" className="text-sm">

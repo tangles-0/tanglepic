@@ -20,6 +20,7 @@ export default async function UploadPage() {
       <PageHeader
         title="Upload files"
         subtitle={`Logged in as ${session.user.email ?? "user"}.`}
+        backLink={{ href: "/gallery", label: "back 2 gallery" }}
       />
 
       {!settings.uploadsEnabled ? (
@@ -31,14 +32,7 @@ export default async function UploadPage() {
         resumableThresholdBytes={settings.resumableThresholdBytes}
       />
 
-      <div className="flex flex-wrap gap-4 text-sm text-neutral-500">
-        <TextLink href="/gallery" className="text-sm">
-          &lt; back 2 gallery
-        </TextLink>
-        <TextLink href="/signout" className="text-sm">
-          sign out
-        </TextLink>
-      </div>
+      
     </main>
   );
 }

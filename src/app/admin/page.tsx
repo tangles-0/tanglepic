@@ -38,7 +38,7 @@ export default async function AdminHomePage() {
       <PageHeader
         title="Admin"
         subtitle="Platform overview and controls."
-        backLink={{ href: "/gallery", label: "Back to gallery" }}
+        backLink={{ href: "/gallery", label: "back 2 gallery" }}
       >
         <div className="flex flex-wrap gap-3 text-sm text-neutral-500">
           <TextLink href="/admin/users" className="text-sm">
