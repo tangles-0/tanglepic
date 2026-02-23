@@ -68,6 +68,7 @@ type UploadMessage = {
 };
 
 type RotationDirection = "left" | "right";
+const PAGE_SIZE = 24;
 
 export default function GalleryClient({
   media,
@@ -104,6 +105,7 @@ export default function GalleryClient({
   const [globalDragging, setGlobalDragging] = useState(false);
   const [messages, setMessages] = useState<UploadMessage[]>([]);
   const [showAlbumImages, setShowAlbumImages] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isRotating, setIsRotating] = useState(false);
   const [rotateError, setRotateError] = useState<string | null>(null);
   const [isDitherOpen, setIsDitherOpen] = useState(false);
@@ -124,6 +126,7 @@ export default function GalleryClient({
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const inAlbumContext = Boolean(uploadAlbumId);
+  const usePagination = !inAlbumContext;
 
   useEffect(() => {
     setItems((current) => (current === media ? current : media));
@@ -268,6 +271,19 @@ export default function GalleryClient({
       }),
     [filteredItems, imageVersionBumps],
   );
+  const totalPages = useMemo(() => {
+    if (!usePagination) {
+      return 1;
+    }
+    return Math.max(1, Math.ceil(displayItems.length / PAGE_SIZE));
+  }, [displayItems.length, usePagination]);
+  const pagedDisplayItems = useMemo(() => {
+    if (!usePagination) {
+      return displayItems;
+    }
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return displayItems.slice(start, start + PAGE_SIZE);
+  }, [currentPage, displayItems, usePagination]);
 
   const visibleIds = useMemo(() => new Set(filteredItems.map((image) => image.id)), [filteredItems]);
   const selectedIds = useMemo(
@@ -1057,6 +1073,24 @@ export default function GalleryClient({
   }, [items]);
 
   useEffect(() => {
+    if (!usePagination) {
+      return;
+    }
+    setCurrentPage((current) => {
+      if (current < 1) return 1;
+      if (current > totalPages) return totalPages;
+      return current;
+    });
+  }, [totalPages, usePagination]);
+
+  useEffect(() => {
+    if (!usePagination) {
+      return;
+    }
+    setCurrentPage(1);
+  }, [hideImagesInAlbums, kindFilter, showAlbumImageToggle, showAlbumImages, usePagination]);
+
+  useEffect(() => {
     if (!active) {
       return;
     }
@@ -1173,8 +1207,9 @@ export default function GalleryClient({
             : "No files to show with the current filter."}
         </div>
       ) : (
-        <div className="grid justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,320px))] [grid-template-columns:repeat(auto-fit,minmax(240px,100%))]">
-          {displayItems.map((image) => (
+        <div className="space-y-4">
+          <div className="grid justify-center gap-4 sm:[grid-template-columns:repeat(auto-fit,minmax(240px,320px))] [grid-template-columns:repeat(auto-fit,minmax(240px,100%))]">
+          {pagedDisplayItems.map((image) => (
             <div
               key={image.id}
               draggable={inAlbumContext}
@@ -1292,6 +1327,30 @@ export default function GalleryClient({
               ) : null}
             </div>
           ))}
+          </div>
+          {usePagination && totalPages > 1 ? (
+            <div className="flex items-center justify-center gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((current) => Math.max(1, current - 1))}
+                disabled={currentPage <= 1}
+                className="rounded border border-neutral-200 px-3 py-1 disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span>
+                Page {currentPage} / {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((current) => Math.min(totalPages, current + 1))}
+                disabled={currentPage >= totalPages}
+                className="rounded border border-neutral-200 px-3 py-1 disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          ) : null}
         </div>
       )}
 
