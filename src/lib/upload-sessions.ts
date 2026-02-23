@@ -22,6 +22,7 @@ const S3_BUCKET = process.env.S3_BUCKET;
 const S3_REGION = process.env.S3_REGION;
 const S3_ENDPOINT = process.env.S3_ENDPOINT;
 const MAX_SESSION_AGE_MS = 1000 * 60 * 60 * 24;
+const STALE_UPLOAD_STATE_MS = 1000 * 60 * 15;
 
 const s3Client =
   STORAGE_BACKEND === "s3" && S3_BUCKET && S3_REGION
@@ -178,11 +179,86 @@ export async function initUploadSession(input: InitInput): Promise<UploadSession
 }
 
 export async function listIncompleteUploadSessionsForUser(userId: string): Promise<UploadSessionEntry[]> {
+  await sweepStaleUploadSessionsForUser(userId);
   const rows = await db.select().from(uploadSessions).where(eq(uploadSessions.userId, userId));
   return rows
     .filter((row) => row.state !== "complete")
     .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
     .map((row) => mapSession(row));
+}
+
+export async function clearUploadSessionsForUser(
+  userId: string,
+  sessionIds: string[],
+): Promise<{ cleared: number }> {
+  if (sessionIds.length === 0) {
+    return { cleared: 0 };
+  }
+  const rows = await db
+    .select()
+    .from(uploadSessions)
+    .where(and(eq(uploadSessions.userId, userId), eq(uploadSessions.state, "failed")));
+  const targetIds = new Set(sessionIds);
+  const targets = rows.filter((row) => targetIds.has(row.id));
+
+  for (const row of targets) {
+    const mapped = mapSession(row);
+    if (mapped.backend === "local") {
+      await fs.rm(path.join(SESSION_DIR, mapped.id), { recursive: true, force: true });
+    } else if (s3Client && S3_BUCKET && mapped.storageKey && mapped.s3UploadId) {
+      try {
+        await s3Client.send(
+          new AbortMultipartUploadCommand({
+            Bucket: S3_BUCKET,
+            Key: mapped.storageKey,
+            UploadId: mapped.s3UploadId,
+          }),
+        );
+      } catch {
+        // Ignore stale/unknown multipart sessions during cleanup.
+      }
+    }
+    await db.delete(uploadSessions).where(eq(uploadSessions.id, mapped.id));
+  }
+  return { cleared: targets.length };
+}
+
+export async function markUploadSessionFailedForUser(
+  sessionId: string,
+  userId: string,
+  reason: string,
+): Promise<void> {
+  await db
+    .update(uploadSessions)
+    .set({
+      state: "failed",
+      error: reason.slice(0, 500),
+      updatedAt: new Date(),
+    })
+    .where(and(eq(uploadSessions.id, sessionId), eq(uploadSessions.userId, userId)));
+}
+
+export async function sweepStaleUploadSessionsForUser(userId: string): Promise<number> {
+  const now = Date.now();
+  const rows = await db.select().from(uploadSessions).where(eq(uploadSessions.userId, userId));
+  const stale = rows.filter((row) => {
+    if (row.state !== "initiated" && row.state !== "uploading" && row.state !== "finalizing") {
+      return false;
+    }
+    return now - row.updatedAt.getTime() > STALE_UPLOAD_STATE_MS;
+  });
+
+  for (const row of stale) {
+    await db
+      .update(uploadSessions)
+      .set({
+        state: "failed",
+        error: "stale timeout",
+        updatedAt: new Date(),
+      })
+      .where(and(eq(uploadSessions.id, row.id), eq(uploadSessions.userId, userId)));
+  }
+  return stale.length;
 }
 
 export async function getUploadSessionForUser(

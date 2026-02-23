@@ -114,6 +114,7 @@ async function uploadResumable(
       formData.append("chunk", chunk, `${file.name}.part-${partNumber}`);
       const partResponse = await fetch("/api/uploads/part", {
         method: "POST",
+        headers: { "x-upload-session-id": initPayload.sessionId },
         body: formData,
       });
       if (partResponse.ok) {

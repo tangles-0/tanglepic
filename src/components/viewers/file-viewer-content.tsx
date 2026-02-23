@@ -2,12 +2,34 @@
 
 import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
 import { LightFilePdf } from "@energiz3r/icon-library/Icons/Light/LightFilePdf";
+import { LightFileArchive } from "@energiz3r/icon-library/Icons/Light/LightFileArchive";
+
+const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
+
+function isArchiveLike(ext?: string, mimeType?: string): boolean {
+  const normalizedExt = (ext ?? "").toLowerCase();
+  const normalizedMime = (mimeType ?? "").toLowerCase();
+  if (ARCHIVE_EXTENSIONS.has(normalizedExt)) {
+    return true;
+  }
+  return (
+    normalizedMime.includes("zip") ||
+    normalizedMime.includes("7z") ||
+    normalizedMime.includes("gzip") ||
+    normalizedMime.includes("x-tar") ||
+    normalizedMime.includes("rar") ||
+    normalizedMime.includes("bzip") ||
+    normalizedMime.includes("xz")
+  );
+}
 
 export function FileViewerContent({
   kind,
   previewStatus,
   fullUrl,
   previewUrl,
+  ext,
+  mimeType,
   onRegenerateThumbnail,
   isRegeneratingThumbnail,
 }: {
@@ -15,6 +37,8 @@ export function FileViewerContent({
   previewStatus?: "pending" | "ready" | "failed";
   fullUrl: string;
   previewUrl: string;
+  ext?: string;
+  mimeType?: string;
   onRegenerateThumbnail?: () => void;
   isRegeneratingThumbnail?: boolean;
 }) {
@@ -61,7 +85,11 @@ export function FileViewerContent({
   }
   return (
     <div className="flex sm:max-h-[60vh] min-h-[320px] w-full items-center justify-center rounded border border-neutral-200 bg-neutral-50">
-      <LightFilePdf className="h-12 w-12 text-neutral-500" fill="currentColor" />
+      {isArchiveLike(ext, mimeType) ? (
+        <LightFileArchive className="h-12 w-12 text-neutral-500" fill="currentColor" />
+      ) : (
+        <LightFilePdf className="h-12 w-12 text-neutral-500" fill="currentColor" />
+      )}
     </div>
   );
 }

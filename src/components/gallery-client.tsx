@@ -15,6 +15,7 @@ import { LightArrowAltDown } from '@energiz3r/icon-library/Icons/Light/LightArro
 import { LightTrashAlt } from '@energiz3r/icon-library/Icons/Light/LightTrashAlt';
 import { LightClock } from '@energiz3r/icon-library/Icons/Light/LightClock';
 import { LightFilePdf } from '@energiz3r/icon-library/Icons/Light/LightFilePdf';
+import { LightFileArchive } from '@energiz3r/icon-library/Icons/Light/LightFileArchive';
 import { LightPlayCircle } from '@energiz3r/icon-library/Icons/Light/LightPlayCircle';
 
 import { SharePill } from "./share-pill";
@@ -25,6 +26,27 @@ import { FileViewerContent } from "./viewers/file-viewer-content";
 const SHOW_ALBUM_IMAGES_STORAGE_KEY = "latex-gallery-show-album-images";
 const ROTATABLE_EXTENSIONS = new Set(["jpg", "jpeg", "png"]);
 const INTERNAL_IMAGE_DRAG_TYPE = "application/x-latex-image-id";
+const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
+
+function isArchiveLike(input: { ext?: string; mimeType?: string; kind?: string }): boolean {
+  if (input.kind !== "other") {
+    return false;
+  }
+  const ext = (input.ext ?? "").toLowerCase();
+  const mime = (input.mimeType ?? "").toLowerCase();
+  if (ARCHIVE_EXTENSIONS.has(ext)) {
+    return true;
+  }
+  return (
+    mime.includes("zip") ||
+    mime.includes("7z") ||
+    mime.includes("gzip") ||
+    mime.includes("x-tar") ||
+    mime.includes("rar") ||
+    mime.includes("bzip") ||
+    mime.includes("xz")
+  );
+}
 
 type GalleryImage = {
   id: string;
@@ -1179,7 +1201,11 @@ export default function GalleryClient({
                   </div>
                 ) : image.kind === "other" ? (
                   <div className="mt-2 flex h-48 max-h-64 w-full items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50">
-                    <LightFilePdf className="h-10 w-10 text-neutral-500" fill="currentColor" />
+                    {isArchiveLike(image) ? (
+                      <LightFileArchive className="h-10 w-10 text-neutral-500" fill="currentColor" />
+                    ) : (
+                      <LightFilePdf className="h-10 w-10 text-neutral-500" fill="currentColor" />
+                    )}
                   </div>
                 ) : (
                   <div className="relative mt-2">
@@ -1395,6 +1421,8 @@ export default function GalleryClient({
                     previewStatus={active.previewStatus}
                     fullUrl={activeDisplayItem?.fullUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}.${active.ext}`}
                     previewUrl={activeDisplayItem?.lgUrl ?? `/media/${active.kind}/${active.id}/${active.baseName}-lg.png`}
+                    ext={active.ext}
+                    mimeType={active.mimeType}
                     onRegenerateThumbnail={
                       active.kind === "video" ? () => void regenerateVideoThumbnail() : undefined
                     }

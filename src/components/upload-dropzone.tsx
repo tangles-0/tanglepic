@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { DEFAULT_RESUMABLE_THRESHOLD, uploadSingleMedia } from "@/lib/upload-client";
 import { LightClock } from "@energiz3r/icon-library/Icons/Light/LightClock";
 import { LightFilePdf } from "@energiz3r/icon-library/Icons/Light/LightFilePdf";
+import { LightFileArchive } from "@energiz3r/icon-library/Icons/Light/LightFileArchive";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -12,8 +13,31 @@ type UploadedImage = {
   kind: "image" | "video" | "document" | "other";
   baseName: string;
   ext: string;
+  mimeType?: string;
   previewStatus?: "pending" | "ready" | "failed";
 };
+
+const ARCHIVE_EXTENSIONS = new Set(["zip", "7z", "gz", "gzip", "tar", "rar", "bz2", "xz"]);
+
+function isArchiveLike(entry: Pick<UploadedImage, "kind" | "ext" | "mimeType">): boolean {
+  if (entry.kind !== "other") {
+    return false;
+  }
+  const ext = (entry.ext ?? "").toLowerCase();
+  const mime = (entry.mimeType ?? "").toLowerCase();
+  if (ARCHIVE_EXTENSIONS.has(ext)) {
+    return true;
+  }
+  return (
+    mime.includes("zip") ||
+    mime.includes("7z") ||
+    mime.includes("gzip") ||
+    mime.includes("x-tar") ||
+    mime.includes("rar") ||
+    mime.includes("bzip") ||
+    mime.includes("xz")
+  );
+}
 
 type ShareInfo = {
   id: string;
@@ -63,6 +87,7 @@ export default function UploadDropzone({
       updatedAt: string;
     }>
   >([]);
+  const [isClearingFailed, setIsClearingFailed] = useState(false);
   const dragCounter = useRef(0);
   const inputId = useId();
 
@@ -129,6 +154,29 @@ export default function UploadDropzone({
       }>;
     };
     setIncompleteSessions(payload.sessions ?? []);
+  }
+
+  async function clearFailedSessions() {
+    const failedIds = incompleteSessions
+      .filter((session) => session.state === "failed")
+      .map((session) => session.id);
+    if (failedIds.length === 0) {
+      return;
+    }
+    setIsClearingFailed(true);
+    const response = await fetch("/api/uploads/clear-failed", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: failedIds }),
+    });
+    if (!response.ok) {
+      pushMessage("Unable to clear failed uploads.", "error");
+      setIsClearingFailed(false);
+      return;
+    }
+    setIncompleteSessions((current) => current.filter((session) => session.state !== "failed"));
+    pushMessage("Cleared failed uploads.", "success");
+    setIsClearingFailed(false);
   }
 
   useEffect(() => {
@@ -358,6 +406,7 @@ export default function UploadDropzone({
             kind: image.kind,
             baseName: image.baseName,
             ext: image.ext,
+            mimeType: image.mimeType,
             previewStatus: image.previewStatus,
           },
           ...current,
@@ -595,7 +644,11 @@ export default function UploadDropzone({
                       </div>
                     ) : image.kind === "other" ? (
                       <div className="flex h-8 w-8 items-center justify-center rounded border border-dashed border-neutral-300 bg-neutral-50 text-neutral-500">
-                        <LightFilePdf className="h-4 w-4" fill="currentColor" />
+                        {isArchiveLike(image) ? (
+                          <LightFileArchive className="h-4 w-4" fill="currentColor" />
+                        ) : (
+                          <LightFilePdf className="h-4 w-4" fill="currentColor" />
+                        )}
                       </div>
                     ) : (
                       <img
@@ -652,7 +705,17 @@ export default function UploadDropzone({
 
       {incompleteSessions.length > 0 ? (
         <div className="space-y-2 rounded border border-neutral-200 p-3">
-          <h3 className="text-xs font-medium text-neutral-600">failed / interrupted uploads</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-xs font-medium text-neutral-600">failed / interrupted uploads</h3>
+            <button
+              type="button"
+              onClick={() => void clearFailedSessions()}
+              disabled={isClearingFailed || !incompleteSessions.some((session) => session.state === "failed")}
+              className="rounded border border-neutral-200 px-2 py-1 text-[11px] disabled:opacity-50"
+            >
+              {isClearingFailed ? "Clearing..." : "Clear"}
+            </button>
+          </div>
           <div className="space-y-1">
             {incompleteSessions.slice(0, 20).map((session) => (
               <div key={session.id} className="text-xs text-neutral-600">
