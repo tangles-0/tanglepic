@@ -14,6 +14,9 @@ export type EnvironmentConfig = {
   dbInstanceType: string;
   dbMultiAz: boolean;
   dbBackupRetentionDays: number;
+  s3UseKmsEncryption: boolean;
+  s3Versioned: boolean;
+  s3NoncurrentVersionExpirationDays: number;
 };
 
 const BASE = {
@@ -25,28 +28,34 @@ const CONFIG_BY_ENV: Record<EnvironmentName, Omit<EnvironmentConfig, "environmen
   dev: {
     ...BASE,
     appDomain: "dev.pics.latex.gg",
-    cpu: 512,
-    memoryMiB: 1024,
-    desiredCount: 2,
-    minTasks: 2,
-    maxTasks: 4,
+    cpu: 256,
+    memoryMiB: 512,
+    desiredCount: 1,
+    minTasks: 1,
+    maxTasks: 1,
     dbAllocatedStorageGiB: 20,
-    dbInstanceType: "t4g.medium",
-    dbMultiAz: true,
-    dbBackupRetentionDays: 7,
+    dbInstanceType: "t4g.micro",
+    dbMultiAz: false,
+    dbBackupRetentionDays: 1,
+    s3UseKmsEncryption: false,
+    s3Versioned: false,
+    s3NoncurrentVersionExpirationDays: 0,
   },
   prod: {
     ...BASE,
     appDomain: "pre-prod.pics.latex.gg",
-    cpu: 1024,
-    memoryMiB: 2048,
-    desiredCount: 2,
-    minTasks: 2,
-    maxTasks: 8,
-    dbAllocatedStorageGiB: 50,
-    dbInstanceType: "t4g.large",
-    dbMultiAz: true,
-    dbBackupRetentionDays: 14,
+    cpu: 256,
+    memoryMiB: 512,
+    desiredCount: 1,
+    minTasks: 1,
+    maxTasks: 3,
+    dbAllocatedStorageGiB: 20,
+    dbInstanceType: "t4g.micro",
+    dbMultiAz: false,
+    dbBackupRetentionDays: 7,
+    s3UseKmsEncryption: true,
+    s3Versioned: true,
+    s3NoncurrentVersionExpirationDays: 30,
   },
 };
 

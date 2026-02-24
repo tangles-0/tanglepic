@@ -13,7 +13,7 @@ This CDK app defines a per-environment stack set:
 cd infra/cdk
 pnpm install
 cd ../..
-AWS_PROFILE=latex-admin pnpm infra:cdk:bootstrap:dev
+AWS_PROFILE=latex-admin pnpm cdk:bootstrap:dev
 # Option A (recommended): pass via CDK context
 pnpm --dir infra/cdk exec cdk deploy --all -c env=dev -c certificateArn=arn:aws:acm:ap-southeast-2:ACCOUNT:certificate/ID
 

@@ -70,7 +70,7 @@ jobs:
           docker push "${{ steps.meta.outputs.image_uri }}"
 
       - name: Install CDK dependencies
-        run: pnpm infra:cdk:install
+        run: pnpm cdk:install
 
       - name: Deploy CDK stacks (dev)
         run: pnpm --dir infra/cdk exec cdk deploy --all --require-approval never -c env=dev -c imageTag=${{ steps.meta.outputs.image_tag }} -c certificateArn=${{ secrets.ACM_CERT_ARN_DEV }}

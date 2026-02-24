@@ -31,18 +31,21 @@ export class DataStack extends cdk.Stack {
       enableKeyRotation: true,
     });
 
+    const imageBucketLifecycleRules: s3.LifecycleRule[] = [];
+    if (props.config.s3Versioned && props.config.s3NoncurrentVersionExpirationDays > 0) {
+      imageBucketLifecycleRules.push({
+        noncurrentVersionExpiration: cdk.Duration.days(props.config.s3NoncurrentVersionExpirationDays),
+      });
+    }
+
     this.imageBucket = new s3.Bucket(this, "ImageBucket", {
       bucketName: `${prefix}-images-${this.account}-${this.region}`,
-      encryption: s3.BucketEncryption.KMS,
-      encryptionKey: dataKey,
+      encryption: props.config.s3UseKmsEncryption ? s3.BucketEncryption.KMS : s3.BucketEncryption.S3_MANAGED,
+      encryptionKey: props.config.s3UseKmsEncryption ? dataKey : undefined,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       enforceSSL: true,
-      versioned: true,
-      lifecycleRules: [
-        {
-          noncurrentVersionExpiration: cdk.Duration.days(30),
-        },
-      ],
+      versioned: props.config.s3Versioned,
+      lifecycleRules: imageBucketLifecycleRules,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,
     });
@@ -55,6 +58,23 @@ export class DataStack extends cdk.Stack {
     });
     dbSecurityGroup.addIngressRule(props.appSecurityGroup, ec2.Port.tcp(5432));
 
+    const dbInstanceType = (() => {
+      switch (props.config.dbInstanceType) {
+        case "t4g.micro":
+          return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO);
+        case "t4g.small":
+          return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.SMALL);
+        case "t4g.medium":
+          return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MEDIUM);
+        case "t4g.large":
+          return ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.LARGE);
+        default:
+          throw new Error(
+            `Unsupported dbInstanceType '${props.config.dbInstanceType}'. Expected one of: t4g.micro, t4g.small, t4g.medium, t4g.large.`,
+          );
+      }
+    })();
+
     this.dbInstance = new rds.DatabaseInstance(this, "Database", {
       vpc: props.vpc,
       vpcSubnets: {
@@ -66,12 +86,7 @@ export class DataStack extends cdk.Stack {
       engine: rds.DatabaseInstanceEngine.postgres({
         version: rds.PostgresEngineVersion.VER_16,
       }),
-      instanceType: ec2.InstanceType.of(
-        ec2.InstanceClass.T4G,
-        props.config.dbInstanceType.endsWith("large")
-          ? ec2.InstanceSize.LARGE
-          : ec2.InstanceSize.MEDIUM,
-      ),
+      instanceType: dbInstanceType,
       allocatedStorage: props.config.dbAllocatedStorageGiB,
       maxAllocatedStorage: props.config.dbAllocatedStorageGiB * 4,
       storageEncrypted: true,

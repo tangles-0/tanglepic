@@ -17,7 +17,7 @@
 - Run DB dump from source host.
 - Restore to prod RDS.
 - Sync uploads to prod S3.
-- Run post-import migration command (`pnpm db:migrate:ci`).
+- Run post-import migration command (`pnpm db:push:force`).
 
 ## Validate
 

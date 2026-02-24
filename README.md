@@ -27,9 +27,9 @@ For docker, swap out the hostname for the db container name: `postgresql://latex
 
 For simplicity I create an `.env.local.docker`
 
-### Docker
+### Docker - Local / Development
 
-⚠️ (optional) To simplify setup, you can create `docker-compose.override.yml` in the project root and populate with the below:
+⚠️ (optional) To simplify setup on a local / dev instance, create `docker-compose.override.yml` in the project root and populate with the below:
 
 ```
 networks:
@@ -44,11 +44,15 @@ services:
       - proxy
 ```
 
-⚠️ This enables access to the database server outside of docker engine's internal network, which is required for the dev app (`pnpm dev`) to connect to it. It also enables you to use `pnpm db:push` to populate the tables.
+⚠️ This enables access to the database server outside of docker engine's internal network, which is required for the dev app (`pnpm dev`) to connect to it or for you to use `pnpm db:push` to populate the tables.
 
 To get started, run `docker compose up -d db` to start the database server only, then run `pnpm db:push` to create the tables
 
-Then run `docker compose --env-file .env.local.docker up -d app` to start the app container.
+Then run `docker compose --env-file .env.local.docker up -d app --build` to start / build the app container.
+
+### Docker - Production
+
+Deploy your app using `docker compose --env-file .env.production up -d --build` with `DB_PUSH_PW` set to a secure string in your env file. Provision the database tables by visiting `{host}/api/admin/settings/db-push?pw={DB_PUSH_PW}`.
 
 ### Node / PM2
 
@@ -63,15 +67,15 @@ To run the app directly without docker, correctly set your
   - `pnpm infra:deploy:dev:db-migrate`
   - `pnpm infra:deploy:prod:db-migrate`
 - Dev deploy:
-  - `pnpm infra:cdk:install`
+  - `pnpm cdk:install`
   - `aws sts get-caller-identity` (or set `AWS_PROFILE=latex-admin`)
-  - `pnpm infra:cdk:bootstrap:dev`
+  - `pnpm cdk:bootstrap:dev`
   - `pnpm infra:cdk:deploy:all:dev` (first-time/full infra)
   - `pnpm infra:image:push:dev` (build and push app image tag)
   - `pnpm infra:cdk:deploy:dev` (app/runtime update only)
   - `pnpm infra:db:push:dev` (run schema push in one-off ECS task)
 - Prod deploy:
-  - `pnpm infra:cdk:bootstrap:prod`
+  - `pnpm cdk:bootstrap:prod`
   - `pnpm infra:cdk:deploy:all:prod` (first-time/full infra)
   - `pnpm infra:image:push:prod` (build and push app image tag)
   - `pnpm infra:cdk:deploy:prod` (app/runtime update only)

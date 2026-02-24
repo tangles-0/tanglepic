@@ -23,6 +23,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 }
 
 function runDrizzlePush(): Promise<{ stdout: string; stderr: string }> {
+  
   const localDrizzleKitPath = `${process.cwd()}/node_modules/.bin/drizzle-kit`;
   const baseEnv = {
     ...process.env,
