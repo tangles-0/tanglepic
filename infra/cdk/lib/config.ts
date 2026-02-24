@@ -49,7 +49,7 @@ const CONFIG_BY_ENV: Record<EnvironmentName, Omit<EnvironmentConfig, "environmen
     desiredCount: 1,
     minTasks: 1,
     maxTasks: 3,
-    dbAllocatedStorageGiB: 20,
+    dbAllocatedStorageGiB: 50,
     dbInstanceType: "t4g.micro",
     dbMultiAz: false,
     dbBackupRetentionDays: 7,
