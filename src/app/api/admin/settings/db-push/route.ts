@@ -35,11 +35,11 @@ function runDrizzlePush(): Promise<{ stdout: string; stderr: string }> {
   const attempts: Array<{ command: string; args: string[] }> = [
     {
       command: localDrizzleKitPath,
-      args: ["push", "--config", "./drizzle.config.ts"],
+      args: ["push", "--force", "--config", "./drizzle.config.ts"],
     },
     {
       command: "pnpm",
-      args: ["exec", "drizzle-kit", "push", "--config", "./drizzle.config.ts"],
+      args: ["exec", "drizzle-kit", "push", "--force", "--config", "./drizzle.config.ts"],
     },
   ];
 
