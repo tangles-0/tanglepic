@@ -32,6 +32,11 @@ The app builds a connection string from `PG*` when `DATABASE_URL` is not provide
 - `RATE_LIMIT_WINDOW_MS`
 - `RATE_LIMIT_MAX_ATTEMPTS`
 
+## Billing Variables (optional)
+
+- `BILLING_ROLE_ARN` (role to assume for Cost Explorer reads)
+- `BILLING_CE_REGION` (defaults to `us-east-1`)
+
 ## Environment Matrix
 
 - Local Docker:

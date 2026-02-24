@@ -57,3 +57,4 @@ docker-compose.override.yml
 /scripts/migration-helpers/migration-artifacts/
 
 latex-config.md
+prod-backups

@@ -44,6 +44,26 @@ export class AppStack extends cdk.Stack {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
       description: "Runtime role for latex ECS tasks",
     });
+    const billingReaderRole = new iam.Role(this, "BillingReaderRole", {
+      assumedBy: new iam.ArnPrincipal(taskRole.roleArn),
+      description: "Read-only role for Cost Explorer billing queries",
+    });
+    billingReaderRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: [
+          "ce:GetCostAndUsage",
+          "ce:GetDimensionValues",
+          "ce:GetTags",
+        ],
+        resources: ["*"],
+      }),
+    );
+    taskRole.addToPrincipalPolicy(
+      new iam.PolicyStatement({
+        actions: ["sts:AssumeRole"],
+        resources: [billingReaderRole.roleArn],
+      }),
+    );
     props.imageBucket.grantReadWrite(taskRole);
     props.imageBucket.encryptionKey?.grantEncryptDecrypt(taskRole);
     props.appSecret.grantRead(taskRole);
@@ -76,6 +96,8 @@ export class AppStack extends cdk.Stack {
         RATE_LIMIT_TABLE: props.rateLimitTable.tableName,
         RATE_LIMIT_WINDOW_MS: "300000",
         RATE_LIMIT_MAX_ATTEMPTS: "20",
+        BILLING_ROLE_ARN: billingReaderRole.roleArn,
+        BILLING_CE_REGION: "us-east-1",
       },
       secrets: {
         NEXTAUTH_SECRET: ecs.Secret.fromSecretsManager(props.appSecret, "NEXTAUTH_SECRET"),

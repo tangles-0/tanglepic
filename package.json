@@ -19,6 +19,7 @@
     "infra:deploy:prod:app": "bash ./scripts/infra/deploy-app.sh prod"
   },
   "dependencies": {
+    "@aws-sdk/client-cost-explorer": "^3.996.0",
     "@aws-sdk/client-dynamodb": "^3.969.0",
     "@aws-sdk/client-s3": "^3.986.0",
     "@aws-sdk/client-secrets-manager": "^3.954.0",
@@ -49,6 +50,7 @@
     "cookie": "^1.0.2",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
+    "drizzle-kit": "^0.31.8",
     "drizzle-orm": "^0.45.1",
     "lucide-react": "^0.544.0",
     "next": "^15.5.10",
@@ -65,8 +67,7 @@
     "stripe": "^19.3.1",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "^1.0.7",
-    "zod": "^4.1.11",
-    "drizzle-kit": "^0.31.8"
+    "zod": "^4.1.11"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
