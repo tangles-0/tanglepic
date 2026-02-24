@@ -23,6 +23,8 @@ services:
       - RATE_LIMIT_TABLE=${RATE_LIMIT_TABLE:-}
       - RATE_LIMIT_WINDOW_MS=${RATE_LIMIT_WINDOW_MS:-300000}
       - RATE_LIMIT_MAX_ATTEMPTS=${RATE_LIMIT_MAX_ATTEMPTS:-20}
+      - BILLING_ROLE_ARN=${BILLING_ROLE_ARN}
+      - BILLING_CE_REGION=${BILLING_CE_REGION:-us-east-1}
     restart: unless-stopped
     depends_on:
       db:
