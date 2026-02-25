@@ -668,17 +668,26 @@ export class ImageDitherer {
 
   toBlob(type: string, quality?: number): Promise<Blob> {
     return new Promise<Blob>((resolve, reject) => {
-      this.canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error("Unable to export image."));
-            return;
-          }
+      const finalize = (blob: Blob | null) => {
+        if (blob) {
           resolve(blob);
-        },
-        type,
-        quality,
-      );
+          return;
+        }
+        if (type !== "image/png") {
+          // Some browsers don't support canvas export for all mime types (notably image/gif).
+          this.canvas.toBlob((pngBlob) => {
+            if (!pngBlob) {
+              reject(new Error("Unable to export image."));
+              return;
+            }
+            resolve(pngBlob);
+          }, "image/png");
+          return;
+        }
+        reject(new Error("Unable to export image."));
+      };
+
+      this.canvas.toBlob(finalize, type, quality);
     });
   }
 }

@@ -71,7 +71,7 @@ function buildStorageKey(
   uploadedAt: Date,
 ): string {
   const { year, month, day } = datePathParts(uploadedAt);
-  return path.posix.join("uploads", year, month, day, size, `${baseName}.${ext}`);
+  return path.posix.join("uploads", year, month, day, "image", size, `${baseName}.${ext}`);
 }
 
 export function getImagePath(
